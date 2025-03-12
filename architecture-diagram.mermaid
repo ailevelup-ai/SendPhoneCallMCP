@@ -1,0 +1,36 @@
+flowchart TD
+    Client[Client API] --> APIGateway
+    APIGateway[API Gateway] --> AuthService
+    
+    AuthService[Authentication Service] --> ContentMod[Content Moderation]
+    ContentMod --> CreditSystem[Credit System]
+    CreditSystem --> BlandProxy[Bland.AI Proxy]
+    
+    AuthService --> SupaAuth[(Supabase Auth)]
+    ContentMod --> OpenAI[(OpenAI GPT-4o-mini)]
+    CreditSystem --> SupaDB[(Supabase DB)]
+    CreditSystem --> Stripe[(Stripe API)]
+    
+    BlandProxy --> BlandAPI[Bland.AI API]
+    BlandAPI --> WebhookHandler[Webhook Handler]
+    WebhookHandler --> ClientHook[Client Webhook]
+    WebhookHandler --> Logger[Logging Service]
+    
+    Logger --> GoogleSheets[(Google Sheets)]
+    
+    BlandAPI --> Twilio[(Twilio API)]
+    Twilio --> PhoneNetwork[Phone Network]
+    
+    %% Billing Logic Components
+    CallTracker[Call Tracking Service] --> BlandAPI
+    EventBridge[AWS EventBridge] --> CallTracker
+    CallTracker --> GetCallDetails[Get Call Details]
+    GetCallDetails --> BlandAPI
+    CallTracker --> BillingProcessor[Billing Processor]
+    BillingProcessor --> CreditSystem
+    
+    %% Auto Top-up Flow
+    CreditSystem --> TopupService[Auto Top-up Service]
+    TopupService --> Stripe
+    
+    Admin[Admin Dashboard] --> SupaDB
