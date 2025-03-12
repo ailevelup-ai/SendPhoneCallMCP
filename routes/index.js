@@ -1,41 +1,53 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 
-// Import route modules
-const callRoutes = require('./call.routes');
-const authRoutes = require('./auth.routes');
-const billingRoutes = require('./billing.routes');
-const userRoutes = require('./user.routes');
-const webhookRoutes = require('./webhook.routes');
+// Import available route modules
+// We'll dynamically detect which route files exist and import only those
+const routeModules = {
+  // Map route endpoints to their file paths, with flag for existence
+  'auth': { path: './auth-routes.js', exists: false },
+  'audit': { path: './audit-routes.js', exists: false },
+  'phone-calls': { path: './phone-call-routes.js', exists: false },
+  'dashboard': { path: './dashboard-routes.js', exists: false }
+};
+
+// Check which route files actually exist
+Object.keys(routeModules).forEach(route => {
+  try {
+    if (fs.existsSync(path.join(__dirname, routeModules[route].path))) {
+      routeModules[route].exists = true;
+      const routeModule = require(routeModules[route].path);
+      router.use(`/${route}`, routeModule);
+      console.log(`Route module loaded: ${route}`);
+    }
+  } catch (error) {
+    console.error(`Error loading route module ${route}:`, error.message);
+  }
+});
+
+// Add the simplified call endpoint
 const phoneCallRoutes = require('./phone-call-routes');
-const auditRoutes = require('./audit-routes');
-const dashboardRoutes = require('./dashboard-routes');
-
-// Apply routes
-router.use('/calls', callRoutes);
-router.use('/auth', authRoutes);
-router.use('/billing', billingRoutes);
-router.use('/users', userRoutes);
-router.use('/webhooks', webhookRoutes);
-router.use('/phone-calls', phoneCallRoutes);
-router.use('/audit', auditRoutes);
-router.use('/dashboard', dashboardRoutes);
+router.use('/', phoneCallRoutes);
 
 // Root route for API info
 router.get('/', (req, res) => {
+  // Only include routes that actually exist
+  const endpoints = {};
+  Object.keys(routeModules).forEach(route => {
+    if (routeModules[route].exists) {
+      endpoints[route] = `/api/v1/${route}`;
+    }
+  });
+
+  // Add the simplified call endpoint
+  endpoints.call = '/api/v1/call';
+
   res.json({
     name: 'Bland.AI MCP Wrapper API',
     version: '1.0.0',
-    endpoints: {
-      calls: '/api/v1/calls',
-      auth: '/api/v1/auth',
-      billing: '/api/v1/billing',
-      users: '/api/v1/users',
-      webhooks: '/api/v1/webhooks',
-      phoneCalls: '/api/v1/phone-calls',
-      audit: '/api/v1/audit',
-      dashboard: '/api/v1/dashboard'
-    }
+    endpoints
   });
 });
 
