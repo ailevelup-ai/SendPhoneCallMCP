@@ -106,6 +106,7 @@ router.post('/call', validateApiKey, async (req, res) => {
       .from('calls')
       .insert({
         user_id: req.user.id,
+        call_id: callData.call_id,
         phone_number,
         status: 'initiated',
         task,
@@ -116,7 +117,8 @@ router.post('/call', validateApiKey, async (req, res) => {
         voicemail_action,
         answered_by_enabled,
         max_duration: calculatedMaxDuration,
-        credits_used: creditsToReserve
+        credits_used: creditsToReserve,
+        update_status: 'Pending'
       })
       .select()
       .single();
@@ -137,6 +139,19 @@ router.post('/call', validateApiKey, async (req, res) => {
     if (creditError) {
       console.error('Error updating credits:', creditError);
     }
+
+    // Log API usage
+    await supabaseAdmin
+      .from('api_usage')
+      .insert({
+        user_id: req.user.id,
+        endpoint: '/call',
+        status_code: 200,
+        credits_used: creditsToReserve
+      })
+      .then(({ error }) => {
+        if (error) console.error('Error logging API usage:', error);
+      });
 
     // Log to Google Sheets
     await logCallToGoogleSheets({
@@ -186,7 +201,7 @@ router.get('/call/:callId', validateApiKey, async (req, res) => {
     const { data: call, error } = await supabaseAdmin
       .from('calls')
       .select('*')
-      .eq('id', callId)
+      .eq('call_id', callId)
       .single();
 
     if (error) {
@@ -200,6 +215,69 @@ router.get('/call/:callId', validateApiKey, async (req, res) => {
     res.json(call);
   } catch (error) {
     console.error('Error getting call status:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get user call history
+router.get('/calls', validateApiKey, async (req, res) => {
+  try {
+    const { 
+      limit = 10, 
+      offset = 0,
+      status = null,
+      from_date = null,
+      to_date = null,
+      sort_by = 'created_at',
+      sort_order = 'desc'
+    } = req.query;
+
+    let query = supabaseAdmin
+      .from('calls')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order(sort_by, { ascending: sort_order === 'asc' })
+      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+    
+    if (status) {
+      query = query.eq('status', status);
+    }
+    
+    if (from_date) {
+      query = query.gte('created_at', from_date);
+    }
+    
+    if (to_date) {
+      query = query.lte('created_at', to_date);
+    }
+
+    const { data: calls, error, count } = await query;
+
+    if (error) {
+      console.error('Error fetching call history:', error);
+      return res.status(500).json({ error: 'Server error' });
+    }
+
+    // Get total count
+    const { count: total, error: countError } = await supabaseAdmin
+      .from('calls')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', req.user.id);
+
+    if (countError) {
+      console.error('Error fetching total count:', countError);
+    }
+
+    res.json({ 
+      calls,
+      pagination: {
+        total: total || 0,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
+    });
+  } catch (error) {
+    console.error('Error getting call history:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

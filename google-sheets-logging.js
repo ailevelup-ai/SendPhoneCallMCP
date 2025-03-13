@@ -1,6 +1,8 @@
 // Google Sheets Logging for Bland.AI MCP Wrapper
 const { google } = require('googleapis');
 const sheets = google.sheets('v4');
+const { default: fetch } = require('node-fetch');
+const { supabaseAdmin } = require('./config/supabase');
 require('dotenv').config();
 
 // Configuration from environment variables
@@ -231,7 +233,7 @@ async function fallbackLogging(callData, error) {
   console.error('FALLBACK LOG:', JSON.stringify(logEntry));
 }
 
-// Update call data in Google Sheets using Bland.AI API
+// Update call data in Google Sheets and Supabase using Bland.AI API
 async function updateCallInGoogleSheets(callId, rowIndex) {
   try {
     const authClient = await getAuthClient();
@@ -273,6 +275,16 @@ async function updateCallInGoogleSheets(callId, rowIndex) {
         }
       });
       
+      // Update Supabase as well
+      await supabaseAdmin
+        .from('calls')
+        .update({
+          error_message: `Error fetching call details: ${response.statusText}`,
+          update_status: 'Error fetching data',
+          last_updated: new Date().toISOString()
+        })
+        .eq('call_id', callId);
+      
       return false;
     }
 
@@ -292,8 +304,8 @@ async function updateCallInGoogleSheets(callId, rowIndex) {
     const transferNumber = callData.to || '';
     const answeredBy = callData.answered_by || '';
     const callEndedBy = callData.call_ended_by || '';
-    const analysisSchema = JSON.stringify(callData.analysis_schema || {});
-    const analysis = JSON.stringify(callData.analysis || {});
+    const analysisSchema = callData.analysis_schema || {};
+    const analysis = callData.analysis || {};
     const correctedDuration = callData.corrected_duration || '';
     const errorMessage = callData.error_message || '';
     const callStatus = callData.status || 'completed';
@@ -325,8 +337,8 @@ async function updateCallInGoogleSheets(callId, rowIndex) {
           transferNumber, // Transfer Number
           answeredBy, // Answered By
           callEndedBy, // Call Ended By
-          analysisSchema, // Analysis Schema
-          analysis, // Analysis
+          JSON.stringify(analysisSchema), // Analysis Schema
+          JSON.stringify(analysis), // Analysis
           correctedDuration, // Corrected Duration
           'Updated', // Update Status
           new Date().toISOString() // Last Updated
@@ -334,10 +346,35 @@ async function updateCallInGoogleSheets(callId, rowIndex) {
       }
     });
     
-    console.log(`Successfully updated call ${callId} in Google Sheets`);
+    // Update Supabase with the same data
+    const { error: updateError } = await supabaseAdmin
+      .from('calls')
+      .update({
+        status: callStatus,
+        duration: callDurationMinutes,
+        credits_used: Math.max(1, callDurationMinutes), // Minimum 1 credit
+        recording_url: recordingUrl,
+        call_summary: summary,
+        error_message: errorMessage,
+        concatenated_transcript: concatenatedTranscript,
+        transfer_number: transferNumber,
+        answered_by: answeredBy,
+        call_ended_by: callEndedBy,
+        analysis_schema: analysisSchema,
+        analysis: analysis,
+        update_status: 'Updated',
+        last_updated: new Date().toISOString()
+      })
+      .eq('call_id', callId);
+    
+    if (updateError) {
+      console.error(`Error updating call in Supabase: ${updateError.message}`);
+    }
+    
+    console.log(`Successfully updated call ${callId} in Google Sheets and Supabase`);
     return true;
   } catch (error) {
-    console.error(`Error updating call ${callId} in Google Sheets:`, error);
+    console.error(`Error updating call ${callId}:`, error);
     return false;
   }
 }
@@ -345,6 +382,7 @@ async function updateCallInGoogleSheets(callId, rowIndex) {
 // Poll for pending call updates
 async function pollCallUpdates() {
   try {
+    console.log('Starting call polling process...');
     const authClient = await getAuthClient();
     
     // Get all rows from the spreadsheet
@@ -356,7 +394,11 @@ async function pollCallUpdates() {
     
     const rows = response.data.values || [];
     if (rows.length <= 1) {
-      console.log('No call data to update');
+      console.log('No call data to update in Google Sheets');
+      
+      // Also check Supabase for pending calls
+      await pollSupabaseCalls();
+      
       return;
     }
     
@@ -388,8 +430,46 @@ async function pollCallUpdates() {
       // Add slight delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
+    
+    // Also check Supabase for any calls that might not be in Google Sheets
+    await pollSupabaseCalls();
+    
+    console.log('Call polling completed');
   } catch (error) {
     console.error('Error polling for call updates:', error);
+  }
+}
+
+// Poll for pending call updates in Supabase
+async function pollSupabaseCalls() {
+  try {
+    console.log('Checking Supabase for pending calls...');
+    
+    // Get calls with update_status 'Pending' or 'Error fetching data'
+    const { data: pendingCalls, error } = await supabaseAdmin
+      .from('calls')
+      .select('call_id')
+      .in('update_status', ['Pending', 'Error fetching data', null])
+      .order('created_at', { ascending: false })
+      .limit(100);
+    
+    if (error) {
+      console.error('Error fetching pending calls from Supabase:', error);
+      return;
+    }
+    
+    console.log(`Found ${pendingCalls.length} pending calls in Supabase`);
+    
+    for (const call of pendingCalls) {
+      // Check if call exists in Google Sheets
+      // For Supabase-only updates, we use rowIndex 0 which is a special flag
+      await updateCallInGoogleSheets(call.call_id, 0);
+      
+      // Add slight delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  } catch (error) {
+    console.error('Error polling Supabase calls:', error);
   }
 }
 
@@ -456,5 +536,6 @@ module.exports = {
   logCallToGoogleSheets,
   generateCallReport,
   pollCallUpdates,
-  updateCallInGoogleSheets
+  updateCallInGoogleSheets,
+  pollSupabaseCalls
 };

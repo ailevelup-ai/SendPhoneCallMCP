@@ -1,70 +1,178 @@
-# SendPhoneCallMCP
+# Bland.AI MCP - Management Control Panel
 
-A middleware wrapper for Bland.AI enterprise API that provides phone call integration, Google Sheets logging, analytics dashboard, and administrative features.
+A comprehensive management control panel for the Bland.AI phone call service. This application allows users to make automated AI phone calls, track call history, and manage credits.
 
 ## Features
 
-- **Phone Call Integration**: Interface with Bland.AI Enterprise API for phone call capabilities
-- **Google Sheets Logging**: Automatic logging of all call data to Google Sheets
-- **Analytics Dashboard**: Real-time monitoring of call metrics and usage
-- **Audit Logging**: Comprehensive audit trail of all system activities
-- **User Management**: Admin controls for managing users and permissions
-- **Credit System**: Track and manage API usage and credits
+- **User Authentication**: Create accounts, login, and manage API keys
+- **Credits System**: View and top up your credits
+- **Call History**: View detailed call history with filtering and sorting
+- **Call Details**: See detailed information about each call, including transcripts and recordings
+- **Polling System**: Automatic updates from Bland.AI to keep call data current
+- **Google Sheets Integration**: Log all calls to Google Sheets for easy export and analysis
+- **Supabase Integration**: Secure database storage with PostgreSQL
+- **Modern UI**: Clean, responsive front-end built with React
 
-## Setup
+## Tech Stack
 
-### Prerequisites
-- Node.js (v14+)
-- NPM or Yarn
-- Google Cloud Platform account with Sheets API enabled
-- Bland.AI Enterprise API key
-- Supabase account for database
+- **Backend**: Node.js with Express
+- **Frontend**: React with React Router
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Custom auth with Supabase
+- **Logging**: Google Sheets API
+- **Storage**: Supabase Storage
+- **Hosting**: Any platform that supports Node.js
 
-### Installation
+## Prerequisites
 
-1. Clone this repository
+- Node.js 14+ and npm
+- Supabase account and project
+- Google Cloud Platform account with Google Sheets API enabled
+- Bland.AI API key
+
+## Installation
+
+### 1. Clone the repository
+
 ```bash
-git clone https://github.com/yourusername/SendPhoneCallMCP.git
+git clone https://github.com/ailevelup-ai/SendPhoneCallMCP.git
 cd SendPhoneCallMCP
 ```
 
-2. Install dependencies
+### 2. Install dependencies
+
 ```bash
+# Install server dependencies
 npm install
+
+# Install client dependencies
+cd client
+npm install
+cd ..
 ```
 
-3. Configure environment variables
-   - Copy `.env.example` to `.env`
-   - Fill in all required API keys and configuration values
+### 3. Set up environment variables
 
-4. Set up Google Sheets integration
-   - Create a service account in Google Cloud Console
-   - Grant the service account access to your Google Sheets document
-   - Add the service account credentials to your `.env` file
+Create a `.env` file in the root directory with the following variables:
 
-5. Start the server
+```
+# Server configuration
+PORT=3040
+NODE_ENV=development
+
+# Bland.AI API
+BLAND_ENTERPRISE_API_KEY=your_bland_api_key
+BLAND_ENCRYPTED_KEY=your_bland_encrypted_key
+BLAND_DEFAULT_VOICE=nat
+BLAND_DEFAULT_FROM_NUMBER=+15615665857
+BLAND_DEFAULT_MODEL=turbo
+BLAND_DEFAULT_TEMPERATURE=1
+BLAND_DEFAULT_VOICEMAIL_ACTION=hangup
+BLAND_ANSWERED_BY_ENABLED=true
+
+# Supabase
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_supabase_service_key
+SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Google Sheets
+GOOGLE_SHEETS_DOC_ID=your_google_sheets_doc_id
+GOOGLE_SHEETS_CLIENT_EMAIL=your_google_service_account_email
+GOOGLE_SHEETS_PRIVATE_KEY="your_google_service_account_private_key"
+```
+
+Create a `.env` file in the client directory:
+
+```
+REACT_APP_SUPABASE_URL=your_supabase_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### 4. Set up Supabase database
+
+Run the schema creation script:
+
 ```bash
+node scripts/update-schema.js
+```
+
+### 5. Initialize Google Sheets
+
+The application will automatically create and initialize the Google Sheets document on first run.
+
+## Running the Application
+
+### Development Mode
+
+```bash
+# Start the server
+npm start
+
+# In a separate terminal, start the client
+cd client
 npm start
 ```
 
-## Environment Variables
+The server will run on port 3040 and the client on port 3000.
 
-See `.env.example` for all required environment variables.
+### Production Mode
+
+```bash
+# Build the client
+cd client
+npm run build
+cd ..
+
+# Start the production server
+NODE_ENV=production npm start
+```
+
+In production mode, the server will serve the React build files.
 
 ## API Endpoints
 
-- `POST /api/v1/call`: Send a phone call
-- `GET /api/v1/calls`: Get call history
-- `GET /api/v1/audit/logs`: Get audit logs (admin only)
-- `GET /api/v1/dashboard`: Get dashboard metrics (admin only)
+### Authentication
 
-## Logging
+- `POST /api/v1/auth/register` - Register a new user
+- `POST /api/v1/auth/login` - Login
+- `POST /api/v1/auth/logout` - Logout
+- `POST /api/v1/auth/reset-api-key` - Reset API key
 
-Call data is automatically logged to:
-- Google Sheets (for easy viewing and reporting)
-- Database (for querying and analytics)
-- Local log files (for backup and debugging)
+### Calls
+
+- `POST /api/v1/call` - Make a new call
+- `GET /api/v1/call/:callId` - Get call details
+- `GET /api/v1/calls` - Get call history
+
+### Credits
+
+- `POST /api/v1/credits/add` - Add credits
+- `GET /api/v1/credits/balance` - Get credit balance
+
+## Polling System
+
+The application includes two polling systems to keep call data updated:
+
+1. **Local Polling**: A script that runs every 5 minutes to update call data
+   ```bash
+   node poll-call-updates.js
+   ```
+
+2. **AWS Lambda Function**: A function that can be deployed to AWS Lambda to poll for updates
+   ```bash
+   # Deploy to AWS Lambda (requires AWS CLI configured)
+   zip -r lambda-function.zip lambda-call-updater.js node_modules
+   aws lambda create-function --function-name bland-ai-call-updater --zip-file fileb://lambda-function.zip --handler lambda-call-updater.handler --runtime nodejs14.x --role your-lambda-execution-role-arn
+   ```
 
 ## License
 
-Private - All rights reserved 
+[MIT](LICENSE)
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request 

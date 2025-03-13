@@ -1,4 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -18,59 +20,12 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Initialize database schema
 async function initializeDatabase() {
   try {
-    // Create tables using raw SQL
-    const { error } = await supabaseAdmin.rpc('exec_sql', {
-      sql: `
-        -- Enable UUID extension
-        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    // Read schema from SQL file
+    const schemaPath = path.join(__dirname, '..', 'schema.sql');
+    const schema = fs.readFileSync(schemaPath, 'utf8');
 
-        -- Create users table
-        CREATE TABLE IF NOT EXISTS users (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          email TEXT UNIQUE NOT NULL,
-          password_hash TEXT NOT NULL,
-          api_key TEXT UNIQUE,
-          role TEXT DEFAULT 'user',
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        );
-
-        -- Create calls table
-        CREATE TABLE IF NOT EXISTS calls (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          user_id UUID REFERENCES users(id),
-          phone_number TEXT NOT NULL,
-          status TEXT NOT NULL,
-          duration INTEGER,
-          credits_used DECIMAL,
-          task TEXT,
-          voice TEXT,
-          from_number TEXT,
-          recording_url TEXT,
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        );
-
-        -- Create credits table
-        CREATE TABLE IF NOT EXISTS credits (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          user_id UUID REFERENCES users(id),
-          balance DECIMAL NOT NULL DEFAULT 0,
-          created_at TIMESTAMPTZ DEFAULT NOW(),
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        );
-
-        -- Create audit_logs table
-        CREATE TABLE IF NOT EXISTS audit_logs (
-          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          user_id UUID REFERENCES users(id),
-          event_type TEXT NOT NULL,
-          metadata JSONB,
-          severity TEXT DEFAULT 'info',
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        );
-      `
-    });
+    // Create tables using raw SQL from file
+    const { error } = await supabaseAdmin.rpc('exec_sql', { sql: schema });
 
     if (error) {
       console.error('Error creating tables:', error);
