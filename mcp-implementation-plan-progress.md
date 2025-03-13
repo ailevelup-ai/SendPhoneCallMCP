@@ -52,6 +52,10 @@ This document tracks our progress in implementing the MCP server and migrating t
 - [x] Implement credit resources:
    - [x] Credit balance
    - [x] Credit usage history
+- [ ] Set up database tables in Supabase:
+   - [ ] user_settings
+   - [ ] call_history
+   - [ ] credits
 
 ### Google Sheets Rate Limiting
 - [x] Token bucket implementation
@@ -84,6 +88,7 @@ This document tracks our progress in implementing the MCP server and migrating t
 - [ ] Configure WAF for API protection
 
 ### Testing and Validation
+- [x] Basic MCP server testing
 - [ ] Create unit tests
 - [ ] Create integration tests
 - [ ] Load testing
