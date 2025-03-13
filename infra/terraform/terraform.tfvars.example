@@ -1,0 +1,35 @@
+# Environment
+environment = "dev"  # Options: dev, staging, prod
+
+# AWS Configuration
+aws_region = "us-east-1"
+vpc_id = "vpc-xxxxxxxx"  # Replace with your VPC ID
+subnet_id = "subnet-xxxxxxxx"  # Replace with your Subnet ID
+key_name = "your-key-pair-name"  # Replace with your EC2 key pair name
+
+# Bland.AI Configuration
+bland_api_key = "your-bland-api-key"  # Replace with your Bland.AI API key
+bland_default_from_number = "+15555555555"  # Replace with your default phone number
+bland_default_voice = "ai-morgan"
+bland_default_model = "gpt-4o"
+bland_default_temperature = 0.7
+bland_default_voicemail_action = "continue"
+bland_answered_by_enabled = true
+
+# Supabase Configuration
+supabase_url = "https://your-project.supabase.co"  # Replace with your Supabase URL
+supabase_service_key = "your-supabase-service-key"  # Replace with your Supabase service key
+supabase_anon_key = "your-supabase-anon-key"  # Replace with your Supabase anon key
+
+# Google Sheets Configuration
+google_sheets_doc_id = "your-google-sheets-doc-id"  # Replace with your Google Sheets document ID
+google_sheets_client_email = "your-service-account@google.com"  # Replace with your Google service account email
+google_sheets_private_key = "-----BEGIN PRIVATE KEY-----\nYour private key here\n-----END PRIVATE KEY-----"  # Replace with your Google service account private key
+
+# JWT Configuration
+jwt_secret = "your-jwt-secret"  # Replace with a secure random string
+
+# Instance Configuration
+ec2_instance_type = "t3.small"  # Adjust based on your workload requirements
+lambda_memory_size = 256  # Adjust based on your workload requirements
+lambda_timeout = 300  # 5 minutes 

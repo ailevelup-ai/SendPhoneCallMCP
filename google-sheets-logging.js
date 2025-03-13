@@ -5,6 +5,9 @@ const { default: fetch } = require('node-fetch');
 const { supabaseAdmin } = require('./config/supabase');
 require('dotenv').config();
 
+const { googleSheetsRateLimiter } = require('./utils/rate-limiter');
+const { logger } = require('./utils/logger');
+
 // Configuration from environment variables
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_DOC_ID;
 const SHEET_NAME = 'Call_Logs'; // Changed from 'Call Logs' to avoid spaces
@@ -153,9 +156,16 @@ async function initializeSpreadsheet() {
   }
 }
 
-// Main logging function
+/**
+ * Log a call to Google Sheets
+ * @param {Object} callData Call data to log
+ * @returns {Promise<Object>} Call data with rowIndex
+ */
 async function logCallToGoogleSheets(callData) {
   try {
+    // Acquire token for rate limiting
+    await googleSheetsRateLimiter.consume(1);
+
     // Check if required environment variables are set
     if (!process.env.GOOGLE_SHEETS_DOC_ID || 
         !process.env.GOOGLE_SHEETS_PRIVATE_KEY || 
@@ -217,9 +227,19 @@ async function logCallToGoogleSheets(callData) {
     console.log(`Successfully logged call ${callData.call_id} to Google Sheets`);
     return true;
   } catch (error) {
-    console.error('Error logging to Google Sheets:', error);
-    await fallbackLogging(callData, error);
-    return false;
+    // Check if this is a rate limit error
+    if (error.message.includes('Rate limit exceeded')) {
+      logger.warn('Google Sheets rate limit exceeded, using fallback logging', {
+        callId: callData.call_id
+      });
+      
+      // Use fallback logging method
+      return await fallbackLogging(callData, error);
+    }
+    
+    // Other errors
+    logger.error(`Error logging call to Google Sheets: ${error.message}`, { error });
+    throw error;
   }
 }
 
@@ -233,9 +253,17 @@ async function fallbackLogging(callData, error) {
   console.error('FALLBACK LOG:', JSON.stringify(logEntry));
 }
 
-// Update call data in Google Sheets and Supabase using Bland.AI API
+/**
+ * Update a call in Google Sheets
+ * @param {string} callId Call ID to update
+ * @param {number} rowIndex Row index in the spreadsheet
+ * @returns {Promise<Object>} Updated call data
+ */
 async function updateCallInGoogleSheets(callId, rowIndex) {
   try {
+    // Acquire token for rate limiting (this operation costs 2 tokens - 1 for read, 1 for write)
+    await googleSheetsRateLimiter.consume(2);
+
     const authClient = await getAuthClient();
     
     // Fetch call details from Bland.AI
@@ -374,14 +402,54 @@ async function updateCallInGoogleSheets(callId, rowIndex) {
     console.log(`Successfully updated call ${callId} in Google Sheets and Supabase`);
     return true;
   } catch (error) {
-    console.error(`Error updating call ${callId}:`, error);
-    return false;
+    // Check if this is a rate limit error
+    if (error.message.includes('Rate limit exceeded')) {
+      logger.warn('Google Sheets rate limit exceeded during update, will retry later', {
+        callId,
+        rowIndex
+      });
+      
+      // Queue for retry later instead of failing
+      queueForRetry('updateCall', { callId, rowIndex });
+      return;
+    }
+    
+    // Other errors
+    logger.error(`Error updating call in Google Sheets: ${error.message}`, {
+      error,
+      callId,
+      rowIndex
+    });
+    throw error;
   }
 }
 
-// Poll for pending call updates
+/**
+ * Poll for call updates
+ * @returns {Promise<number>} Number of calls updated
+ */
 async function pollCallUpdates() {
   try {
+    // Get rate limiter stats before operation
+    const beforeStats = googleSheetsRateLimiter.getStats();
+    
+    // Log rate limiter status
+    logger.info('Google Sheets rate limiter status before polling', {
+      availableTokens: beforeStats.availableTokens,
+      usagePercent: beforeStats.usagePercent.toFixed(2) + '%'
+    });
+    
+    // If we're running low on tokens, wait to accumulate more
+    if (beforeStats.availableTokens < 10) {
+      const waitTime = (10 - beforeStats.availableTokens) / googleSheetsRateLimiter.tokensPerSecond * 1000;
+      logger.info(`Waiting ${waitTime.toFixed(0)}ms to accumulate more rate limit tokens`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+
+    // Acquire token for initial spreadsheet read (higher cost operation)
+    await googleSheetsRateLimiter.consume(5);
+
+    // Continue with existing function logic, but split into batches
     console.log('Starting call polling process...');
     const authClient = await getAuthClient();
     
@@ -399,10 +467,11 @@ async function pollCallUpdates() {
       // Also check Supabase for pending calls
       await pollSupabaseCalls();
       
-      return;
+      return 0;
     }
     
     // Skip header row
+    let updatedCount = 0;
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       
@@ -427,6 +496,8 @@ async function pollCallUpdates() {
       console.log(`Updating call data for ${callId} at row ${rowIndex}`);
       await updateCallInGoogleSheets(callId, rowIndex);
       
+      updatedCount++;
+      
       // Add slight delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
@@ -435,8 +506,28 @@ async function pollCallUpdates() {
     await pollSupabaseCalls();
     
     console.log('Call polling completed');
+    
+    // Get and log rate limiter stats after operation
+    const afterStats = googleSheetsRateLimiter.getStats();
+    logger.info('Google Sheets rate limiter status after polling', {
+      availableTokens: afterStats.availableTokens,
+      usagePercent: afterStats.usagePercent.toFixed(2) + '%',
+      requestsTotal: afterStats.requestsTotal,
+      requestsDelayed: afterStats.requestsDelayed
+    });
+    
+    // Return result
+    return updatedCount;
   } catch (error) {
-    console.error('Error polling for call updates:', error);
+    // Check if this is a rate limit error
+    if (error.message.includes('Rate limit exceeded')) {
+      logger.warn('Google Sheets rate limit exceeded during polling, will try again later');
+      return 0;
+    }
+    
+    // Other errors
+    logger.error(`Error polling call updates: ${error.message}`, { error });
+    throw error;
   }
 }
 
@@ -527,6 +618,112 @@ async function generateCallReport(startDate, endDate, userId = null) {
   } catch (error) {
     console.error('Error generating call report:', error);
     return { error: error.message };
+  }
+}
+
+/**
+ * Queue an operation for retry
+ * @param {string} operation Operation name
+ * @param {Object} data Operation data
+ */
+function queueForRetry(operation, data) {
+  // Check if retry queue exists or create it
+  if (!global.retryQueue) {
+    global.retryQueue = [];
+  }
+  
+  // Add to queue with timestamp
+  global.retryQueue.push({
+    operation,
+    data,
+    timestamp: Date.now(),
+    retryCount: 0
+  });
+  
+  // Start retry process if not already running
+  if (!global.retryProcessRunning) {
+    processRetryQueue();
+  }
+}
+
+/**
+ * Process the retry queue
+ */
+async function processRetryQueue() {
+  // Set flag to prevent multiple concurrent processing
+  global.retryProcessRunning = true;
+  
+  try {
+    // Get rate limiter stats
+    const stats = googleSheetsRateLimiter.getStats();
+    
+    // Only process if we have enough tokens
+    if (stats.availableTokens < 10 || global.retryQueue.length === 0) {
+      // Try again later
+      setTimeout(processRetryQueue, 30000);
+      return;
+    }
+    
+    // Process up to 5 items from the queue
+    const itemsToProcess = Math.min(5, global.retryQueue.length);
+    
+    for (let i = 0; i < itemsToProcess; i++) {
+      const item = global.retryQueue.shift();
+      
+      try {
+        // Process based on operation type
+        switch (item.operation) {
+          case 'updateCall':
+            await googleSheetsRateLimiter.consume(2);
+            await updateCallInGoogleSheets(item.data.callId, item.data.rowIndex);
+            break;
+            
+          // Add other operation types as needed
+            
+          default:
+            logger.warn(`Unknown retry operation: ${item.operation}`);
+        }
+      } catch (error) {
+        // If still hitting rate limits, put back in queue
+        if (error.message.includes('Rate limit exceeded')) {
+          item.retryCount++;
+          
+          // If we've retried too many times, log and discard
+          if (item.retryCount > 5) {
+            logger.error(`Giving up on retrying operation after ${item.retryCount} attempts`, {
+              operation: item.operation,
+              data: item.data,
+              error: error.message
+            });
+          } else {
+            // Put back in queue (at the end)
+            global.retryQueue.push(item);
+          }
+        } else {
+          // Log other errors
+          logger.error(`Error processing retry queue item: ${error.message}`, {
+            operation: item.operation,
+            data: item.data,
+            error
+          });
+        }
+      }
+    }
+    
+    // If queue still has items, process again after delay
+    if (global.retryQueue.length > 0) {
+      setTimeout(processRetryQueue, 10000);
+    } else {
+      global.retryProcessRunning = false;
+    }
+  } catch (error) {
+    logger.error(`Error in retry queue processing: ${error.message}`, { error });
+    
+    // Reset flag but try again later
+    setTimeout(() => {
+      global.retryProcessRunning = false;
+      processRetryQueue();
+    }, 60000);
   }
 }
 
