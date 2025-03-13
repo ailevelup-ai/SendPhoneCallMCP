@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const { googleSheetsRateLimiter } = require('./utils/rate-limiter');
 const { logger } = require('./utils/logger');
+const axios = require('axios');
 
 // Configuration from environment variables
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_DOC_ID;
@@ -93,7 +94,6 @@ async function initializeSpreadsheet() {
       'Voice Used',
       'Task/Prompt',
       'Moderation Status',
-      'Model Used',
       'From Number',
       'Billed Amount',
       'Error Messages',
@@ -116,36 +116,54 @@ async function initializeSpreadsheet() {
     await sheets.spreadsheets.values.update({
       auth: authClient,
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A1:AC1`,
+      range: `${SHEET_NAME}!A1:AB1`,
       valueInputOption: 'RAW',
       resource: {
         values: [headers]
       }
     });
 
-    // Format header row
+    // Format header row and set row height for all rows
     await sheets.spreadsheets.batchUpdate({
       auth: authClient,
       spreadsheetId: SPREADSHEET_ID,
       resource: {
-        requests: [{
-          repeatCell: {
-            range: {
-              sheetId: sheetId,
-              startRowIndex: 0,
-              endRowIndex: 1,
-              startColumnIndex: 0,
-              endColumnIndex: headers.length
-            },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 0.8, green: 0.8, blue: 0.8 },
-                textFormat: { bold: true }
-              }
-            },
-            fields: 'userEnteredFormat(backgroundColor,textFormat)'
+        requests: [
+          // Format header row
+          {
+            repeatCell: {
+              range: {
+                sheetId: sheetId,
+                startRowIndex: 0,
+                endRowIndex: 1,
+                startColumnIndex: 0,
+                endColumnIndex: headers.length
+              },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: { red: 0.8, green: 0.8, blue: 0.8 },
+                  textFormat: { bold: true }
+                }
+              },
+              fields: 'userEnteredFormat(backgroundColor,textFormat)'
+            }
+          },
+          // Set row height for all rows to 21 pixels
+          {
+            updateDimensionProperties: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: 0,
+                endIndex: 1000 // Set for a large number of rows
+              },
+              properties: {
+                pixelSize: 21
+              },
+              fields: 'pixelSize'
+            }
           }
-        }]
+        ]
       }
     });
 
@@ -154,6 +172,29 @@ async function initializeSpreadsheet() {
     console.error('Error initializing spreadsheet:', error);
     throw error;
   }
+}
+
+/**
+ * Format the transcripts array into a readable conversation
+ */
+function formatTranscript(transcripts) {
+  if (!transcripts || !Array.isArray(transcripts) || transcripts.length === 0) {
+    return '';
+  }
+  
+  // Sort transcripts by timestamp
+  const sortedTranscripts = [...transcripts].sort((a, b) => {
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+  
+  // Format into conversation with timestamps
+  return sortedTranscripts.map(t => {
+    const timestamp = new Date(t.created_at).toLocaleTimeString();
+    const speaker = t.user === 'assistant' ? 'Assistant' : 
+                   t.user === 'user' ? 'Customer' : 
+                   t.user === 'agent-action' ? 'System' : t.user;
+    return `[${timestamp}] ${speaker}: ${t.text}`;
+  }).join('\n');
 }
 
 /**
@@ -193,12 +234,12 @@ async function logCallToGoogleSheets(callData) {
       callData.voice || 'N/A',
       callData.task || '',
       'passed', // Moderation is handled before logging
-      callData.model || 'turbo',
       callData.from_number || 'N/A',
       billedAmount.toFixed(2),
       '', // Error messages
       '', // Call summary (will be updated by polling function)
       '', // Recording URL (will be updated by polling function)
+      '', // Transcript (will be updated by polling function)
       JSON.stringify(callData.request_parameters || {}),
       JSON.stringify(callData.response_parameters || {}),
       '', // Concatenated transcript
@@ -216,7 +257,7 @@ async function logCallToGoogleSheets(callData) {
     await sheets.spreadsheets.values.append({
       auth: authClient,
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A1:AC1`,
+      range: `${SHEET_NAME}!A1:AB1`,
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       resource: {
@@ -261,166 +302,268 @@ async function fallbackLogging(callData, error) {
  */
 async function updateCallInGoogleSheets(callId, rowIndex) {
   try {
-    // Acquire token for rate limiting (this operation costs 2 tokens - 1 for read, 1 for write)
-    await googleSheetsRateLimiter.consume(2);
-
-    const authClient = await getAuthClient();
+    logger.info(`Updating call ${callId} in Google Sheets at row ${rowIndex}`);
+    
+    // If rowIndex is 0, we need to find the row for this call ID
+    if (rowIndex === 0) {
+      rowIndex = await findRowForCallId(callId);
+      if (!rowIndex) {
+        logger.warn(`Call ID ${callId} not found in Google Sheets`);
+        return false;
+      }
+    }
     
     // Fetch call details from Bland.AI
-    const response = await fetch(`https://api.bland.ai/v1/calls/${callId}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${process.env.BLAND_ENTERPRISE_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    logger.info(`Fetching call details from Bland.AI API for call ${callId}`);
+    try {
+      const response = await axios.get(`https://api.bland.ai/v1/calls/${callId}`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.BLAND_ENTERPRISE_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    if (!response.ok) {
-      console.error(`Error fetching call details for ${callId}: ${response.statusText}`);
+      const callData = response.data;
       
-      // Update the row with error
+      // Calculate call duration in minutes
+      const callDurationMinutes = callData.call_length || 0;
+      
+      // Calculate billed amount based on actual call duration
+      // $0.10 per minute (minimum 1 minute)
+      const billedAmount = Math.max(1, callDurationMinutes) * 0.10;
+
+      // Extract additional fields from call data
+      const summary = callData.summary || '';
+      const recordingUrl = callData.recording_url || '';
+      const formattedTranscript = formatTranscript(callData.transcripts || []);
+      const concatenatedTranscript = callData.concatenated_transcript || '';
+      const transferNumber = callData.to || '';
+      const answeredBy = callData.answered_by || '';
+      const callEndedBy = callData.call_ended_by || '';
+      const analysisSchema = callData.analysis_schema || {};
+      const analysis = callData.analysis || {};
+      const correctedDuration = callData.corrected_duration || '';
+      const errorMessage = callData.error_message || '';
+      const callStatus = callData.status || 'completed';
+      
+      // Get auth client for Google Sheets
+      const authClient = await getAuthClient();
+      
+      // Update the Google Sheet with complete call details
       await sheets.spreadsheets.values.update({
         auth: authClient,
         spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!Q${rowIndex}:AB${rowIndex}`,
+        range: `${SHEET_NAME}!F${rowIndex}:AB${rowIndex}`,
         valueInputOption: 'RAW',
         resource: {
           values: [[
-            '', // Call summary
-            '', // Recording URL
-            '', // Request Parameters
-            '', // Response Parameters
-            '', // Concatenated Transcript
-            '', // Transfer Number
-            '', // Answered By
-            '', // Call Ended By
-            '', // Analysis Schema
-            '', // Analysis
-            '', // Corrected Duration
-            'Error fetching data', // Update Status
-            new Date().toISOString() // Last Updated
+            callDurationMinutes.toString(), // F - Call Duration
+            callStatus,                     // G - Call Status
+            '',                             // H - Credits Used (unchanged)
+            '',                             // I - Webhook URL (unchanged)
+            '',                             // J - Voice Used (unchanged)
+            '',                             // K - Task/Prompt (unchanged)
+            '',                             // L - Moderation Status (unchanged)
+            '',                             // M - From Number (unchanged)
+            billedAmount.toFixed(2),        // N - Billed Amount
+            errorMessage,                   // O - Error Messages
+            summary,                        // P - Call Summary
+            recordingUrl,                   // Q - Recording URL
+            formattedTranscript,            // R - Transcript
+            '',                             // S - Request Parameters (unchanged)
+            '',                             // T - Response Parameters (unchanged)
+            concatenatedTranscript,         // U - Concatenated Transcript
+            transferNumber,                 // V - Transfer Number
+            answeredBy,                     // W - Answered By
+            callEndedBy,                    // X - Call Ended By
+            JSON.stringify(analysisSchema), // Y - Analysis Schema
+            JSON.stringify(analysis),       // Z - Analysis
+            correctedDuration,              // AA - Corrected Duration
+            'Updated',                      // AB - Update Status
+            new Date().toISOString()        // AC - Last Updated
           ]]
         }
       });
       
+      // Set row height to 21 pixels for the updated row
+      try {
+        const { data: spreadsheet } = await sheets.spreadsheets.get({
+          auth: authClient,
+          spreadsheetId: SPREADSHEET_ID,
+          ranges: [],
+          includeGridData: false,
+        });
+        
+        let sheetId = null;
+        for (const sheet of spreadsheet.sheets) {
+          if (sheet.properties.title === SHEET_NAME) {
+            sheetId = sheet.properties.sheetId;
+            break;
+          }
+        }
+        
+        if (sheetId) {
+          await sheets.spreadsheets.batchUpdate({
+            auth: authClient,
+            spreadsheetId: SPREADSHEET_ID,
+            resource: {
+              requests: [{
+                updateDimensionProperties: {
+                  range: {
+                    sheetId: sheetId,
+                    dimension: 'ROWS',
+                    startIndex: rowIndex - 1, // Convert to 0-indexed
+                    endIndex: rowIndex // End is exclusive
+                  },
+                  properties: {
+                    pixelSize: 21
+                  },
+                  fields: 'pixelSize'
+                }
+              }]
+            }
+          });
+        }
+      } catch (rowHeightError) {
+        logger.warn(`Failed to set row height: ${rowHeightError.message}`);
+      }
+      
+      // Update Supabase with the same data
+      try {
+        const { error: updateError } = await supabaseAdmin
+          .from('calls')
+          .update({
+            status: callStatus,
+            duration: callDurationMinutes,
+            credits_used: Math.max(1, callDurationMinutes), // Minimum 1 credit
+            recording_url: recordingUrl,
+            call_summary: summary,
+            error_message: errorMessage,
+            concatenated_transcript: concatenatedTranscript,
+            transcript: formattedTranscript,
+            transfer_number: transferNumber,
+            answered_by: answeredBy,
+            call_ended_by: callEndedBy,
+            analysis_schema: analysisSchema,
+            analysis: analysis,
+            update_status: 'Updated',
+            last_updated: new Date().toISOString()
+          })
+          .eq('call_id', callId);
+        
+        if (updateError) {
+          console.error(`Error updating call in Supabase: ${updateError.message}`);
+        }
+      } catch (supabaseError) {
+        logger.warn(`Supabase update failed (this is normal if Supabase is not configured): ${supabaseError.message}`);
+      }
+      
+      logger.info(`Successfully updated call ${callId} in Google Sheets`);
+      return true;
+    } catch (apiError) {
+      // Handle Bland.AI API errors
+      console.error(`Error fetching call details for ${callId}: ${apiError.message}`);
+      
+      // Update the row with error
+      const authClient = await getAuthClient();
+      await sheets.spreadsheets.values.update({
+        auth: authClient,
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!O${rowIndex}:AB${rowIndex}`,
+        valueInputOption: 'RAW',
+        resource: {
+          values: [[
+            '', // Error Messages (now column O)
+            '', // Call summary (now column P)
+            '', // Recording URL (now column Q)
+            '', // Transcript (now column R)
+            '', // Request Parameters (now column S)
+            '', // Response Parameters (now column T)
+            '', // Concatenated Transcript (now column U)
+            '', // Transfer Number (now column V)
+            '', // Answered By (now column W)
+            '', // Call Ended By (now column X)
+            '', // Analysis Schema (now column Y)
+            '', // Analysis (now column Z)
+            '', // Corrected Duration (now column AA)
+            'Error fetching data' // Update Status (now column AB)
+          ]]
+        }
+      });
+      
+      // Also set row height to 21 pixels even for error rows
+      try {
+        const { data: spreadsheet } = await sheets.spreadsheets.get({
+          auth: authClient,
+          spreadsheetId: SPREADSHEET_ID,
+          ranges: [],
+          includeGridData: false,
+        });
+        
+        let sheetId = null;
+        for (const sheet of spreadsheet.sheets) {
+          if (sheet.properties.title === SHEET_NAME) {
+            sheetId = sheet.properties.sheetId;
+            break;
+          }
+        }
+        
+        if (sheetId) {
+          await sheets.spreadsheets.batchUpdate({
+            auth: authClient,
+            spreadsheetId: SPREADSHEET_ID,
+            resource: {
+              requests: [{
+                updateDimensionProperties: {
+                  range: {
+                    sheetId: sheetId,
+                    dimension: 'ROWS',
+                    startIndex: rowIndex - 1, // Convert to 0-indexed
+                    endIndex: rowIndex // End is exclusive
+                  },
+                  properties: {
+                    pixelSize: 21
+                  },
+                  fields: 'pixelSize'
+                }
+              }]
+            }
+          });
+        }
+      } catch (rowHeightError) {
+        logger.warn(`Failed to set row height: ${rowHeightError.message}`);
+      }
+      
       // Update Supabase as well
-      await supabaseAdmin
-        .from('calls')
-        .update({
-          error_message: `Error fetching call details: ${response.statusText}`,
-          update_status: 'Error fetching data',
-          last_updated: new Date().toISOString()
-        })
-        .eq('call_id', callId);
+      try {
+        await supabaseAdmin
+          .from('calls')
+          .update({
+            error_message: `Error fetching call details: ${apiError.message}`,
+            update_status: 'Error fetching data',
+            last_updated: new Date().toISOString()
+          })
+          .eq('call_id', callId);
+      } catch (supabaseError) {
+        logger.warn(`Supabase error update failed: ${supabaseError.message}`);
+      }
       
       return false;
     }
-
-    const callData = await response.json();
-    
-    // Calculate call duration in minutes
-    const callDurationMinutes = callData.call_length || 0;
-    
-    // Calculate billed amount based on actual call duration
-    // $0.10 per minute (minimum 1 minute)
-    const billedAmount = Math.max(1, callDurationMinutes) * 0.10;
-
-    // Extract additional fields from call data
-    const summary = callData.summary || '';
-    const recordingUrl = callData.recording_url || '';
-    const concatenatedTranscript = callData.concatenated_transcript || '';
-    const transferNumber = callData.to || '';
-    const answeredBy = callData.answered_by || '';
-    const callEndedBy = callData.call_ended_by || '';
-    const analysisSchema = callData.analysis_schema || {};
-    const analysis = callData.analysis || {};
-    const correctedDuration = callData.corrected_duration || '';
-    const errorMessage = callData.error_message || '';
-    const callStatus = callData.status || 'completed';
-    
-    // Update the Google Sheet with complete call details
-    await sheets.spreadsheets.values.update({
-      auth: authClient,
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!F${rowIndex}:AC${rowIndex}`,
-      valueInputOption: 'RAW',
-      resource: {
-        values: [[
-          callDurationMinutes.toString(), // Call Duration
-          callStatus, // Call Status
-          '', // Credits Used (unchanged)
-          '', // Webhook URL (unchanged)
-          '', // Voice Used (unchanged)
-          '', // Task/Prompt (unchanged)
-          '', // Moderation Status (unchanged)
-          '', // Model Used (unchanged)
-          '', // From Number (unchanged)
-          billedAmount.toFixed(2), // Billed Amount
-          errorMessage, // Error Messages
-          summary, // Call Summary
-          recordingUrl, // Recording URL
-          '', // Request Parameters (unchanged)
-          '', // Response Parameters (unchanged)
-          concatenatedTranscript, // Concatenated Transcript
-          transferNumber, // Transfer Number
-          answeredBy, // Answered By
-          callEndedBy, // Call Ended By
-          JSON.stringify(analysisSchema), // Analysis Schema
-          JSON.stringify(analysis), // Analysis
-          correctedDuration, // Corrected Duration
-          'Updated', // Update Status
-          new Date().toISOString() // Last Updated
-        ]]
-      }
-    });
-    
-    // Update Supabase with the same data
-    const { error: updateError } = await supabaseAdmin
-      .from('calls')
-      .update({
-        status: callStatus,
-        duration: callDurationMinutes,
-        credits_used: Math.max(1, callDurationMinutes), // Minimum 1 credit
-        recording_url: recordingUrl,
-        call_summary: summary,
-        error_message: errorMessage,
-        concatenated_transcript: concatenatedTranscript,
-        transfer_number: transferNumber,
-        answered_by: answeredBy,
-        call_ended_by: callEndedBy,
-        analysis_schema: analysisSchema,
-        analysis: analysis,
-        update_status: 'Updated',
-        last_updated: new Date().toISOString()
-      })
-      .eq('call_id', callId);
-    
-    if (updateError) {
-      console.error(`Error updating call in Supabase: ${updateError.message}`);
-    }
-    
-    console.log(`Successfully updated call ${callId} in Google Sheets and Supabase`);
-    return true;
   } catch (error) {
-    // Check if this is a rate limit error
-    if (error.message.includes('Rate limit exceeded')) {
-      logger.warn('Google Sheets rate limit exceeded during update, will retry later', {
-        callId,
-        rowIndex
-      });
-      
-      // Queue for retry later instead of failing
-      queueForRetry('updateCall', { callId, rowIndex });
-      return;
+    logger.error(`Error updating call ${callId} in Google Sheets:`, error);
+    
+    // Update Supabase with error status if available
+    try {
+      await supabaseAdmin
+        .from('calls')
+        .update({ update_status: 'Error fetching data' })
+        .eq('call_id', callId);
+    } catch (supabaseError) {
+      logger.warn(`Supabase error update failed: ${supabaseError.message}`);
     }
     
-    // Other errors
-    logger.error(`Error updating call in Google Sheets: ${error.message}`, {
-      error,
-      callId,
-      rowIndex
-    });
-    throw error;
+    return false;
   }
 }
 
@@ -457,7 +600,7 @@ async function pollCallUpdates() {
     const response = await sheets.spreadsheets.values.get({
       auth: authClient,
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A:AC`,
+      range: `${SHEET_NAME}!A:AB`,
     });
     
     const rows = response.data.values || [];
@@ -536,31 +679,98 @@ async function pollSupabaseCalls() {
   try {
     console.log('Checking Supabase for pending calls...');
     
-    // Get calls with update_status 'Pending' or 'Error fetching data'
-    const { data: pendingCalls, error } = await supabaseAdmin
-      .from('calls')
-      .select('call_id')
-      .in('update_status', ['Pending', 'Error fetching data', null])
-      .order('created_at', { ascending: false })
-      .limit(100);
+    // First, check if the calls table exists
+    try {
+      // Get calls with update_status 'Pending' or 'Error fetching data'
+      const { data: pendingCalls, error } = await supabaseAdmin
+        .from('calls')
+        .select('call_id')
+        .in('update_status', ['Pending', 'Error fetching data', null])
+        .order('created_at', { ascending: false })
+        .limit(100);
+      
+      if (error) {
+        console.error('Error fetching pending calls from Supabase:', error);
+        return;
+      }
+      
+      console.log(`Found ${pendingCalls.length} pending calls in Supabase`);
+      
+      for (const call of pendingCalls) {
+        // Check if call exists in Google Sheets
+        // For Supabase-only updates, we use rowIndex 0 which is a special flag
+        await updateCallInGoogleSheets(call.call_id, 0);
+        
+        // Add slight delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (dbError) {
+      // If the table doesn't exist, create it
+      if (dbError.message && (dbError.message.includes('does not exist') || dbError.code === '42703')) {
+        console.warn('The calls table might not exist or have the correct schema. This is expected in new deployments.');
+        
+        // Instead, try to update based on Google Sheets data
+        console.log('Falling back to updating based on Google Sheets data...');
+        await updateFromGoogleSheets();
+      } else {
+        throw dbError;
+      }
+    }
+  } catch (error) {
+    console.error('Error polling Supabase calls:', error);
+  }
+}
+
+// Update calls based on Google Sheets data when Supabase table isn't available
+async function updateFromGoogleSheets() {
+  try {
+    const authClient = await getAuthClient();
     
-    if (error) {
-      console.error('Error fetching pending calls from Supabase:', error);
+    // Get all rows from the spreadsheet
+    const response = await sheets.spreadsheets.values.get({
+      auth: authClient,
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEET_NAME}!A:E`,
+    });
+    
+    const rows = response.data.values || [];
+    if (rows.length <= 1) {
+      console.log('No call data in Google Sheets');
       return;
     }
     
-    console.log(`Found ${pendingCalls.length} pending calls in Supabase`);
+    // Skip header row
+    console.log(`Found ${rows.length - 1} call records in Google Sheets`);
+    let updatedCount = 0;
     
-    for (const call of pendingCalls) {
-      // Check if call exists in Google Sheets
-      // For Supabase-only updates, we use rowIndex 0 which is a special flag
-      await updateCallInGoogleSheets(call.call_id, 0);
+    // Update only the last 5 calls for performance reasons
+    const maxUpdates = 5;
+    const startRow = Math.max(1, rows.length - maxUpdates);
+    
+    for (let i = startRow; i < rows.length; i++) {
+      const row = rows[i];
+      
+      // Get call ID (column 4)
+      const callId = row[3];
+      if (!callId || callId === 'N/A') {
+        continue;
+      }
+      
+      // Row index in spreadsheet (1-based, header is row 1)
+      const rowIndex = i + 1;
+      
+      console.log(`Updating call data for ${callId} at row ${rowIndex}`);
+      await updateCallInGoogleSheets(callId, rowIndex);
+      
+      updatedCount++;
       
       // Add slight delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
+    
+    console.log(`Updated ${updatedCount} calls from Google Sheets`);
   } catch (error) {
-    console.error('Error polling Supabase calls:', error);
+    console.error('Error updating from Google Sheets:', error);
   }
 }
 
@@ -573,7 +783,7 @@ async function generateCallReport(startDate, endDate, userId = null) {
     const response = await sheets.spreadsheets.values.get({
       auth: authClient,
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A:AC`,
+      range: `${SHEET_NAME}!A:AB`,
     });
     
     const rows = response.data.values || [];
@@ -727,6 +937,38 @@ async function processRetryQueue() {
   }
 }
 
+/**
+ * Find row index for a call ID in Google Sheets
+ * @param {string} callId Call ID to find
+ * @returns {Promise<number|null>} Row index (1-based) or null if not found
+ */
+async function findRowForCallId(callId) {
+  try {
+    const authClient = await getAuthClient();
+    
+    // Get all data to find the correct row
+    const response = await sheets.spreadsheets.values.get({
+      auth: authClient,
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEET_NAME}!A:D`,
+    });
+    
+    const rows = response.data.values || [];
+    
+    // Look for call ID in column D (index 3)
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][3] === callId) {
+        return i + 1; // 1-based row index (header is row 1)
+      }
+    }
+    
+    return null; // Call ID not found
+  } catch (error) {
+    console.error('Error finding row for call ID:', error);
+    throw error;
+  }
+}
+
 // Export the functions
 module.exports = {
   initializeSpreadsheet,
@@ -734,5 +976,6 @@ module.exports = {
   generateCallReport,
   pollCallUpdates,
   updateCallInGoogleSheets,
-  pollSupabaseCalls
+  pollSupabaseCalls,
+  findRowForCallId
 };

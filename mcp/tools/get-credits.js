@@ -85,7 +85,7 @@ async function execute(params, context) {
     // Get credits from database
     const { data: credits, error: dbError } = await supabase
       .from('credits')
-      .select('balance, total_added, total_used, updated_at')
+      .select('balance, updated_at')
       .eq('user_id', userId)
       .single();
 
@@ -119,10 +119,30 @@ async function execute(params, context) {
     // Format the response
     const creditsResponse = {
       balance: credits?.balance || 0,
-      totalAdded: credits?.total_added || 0,
-      totalUsed: credits?.total_used || 0,
+      totalAdded: 0, // Default to 0 for backward compatibility
+      totalUsed: 0, // Default to 0 for backward compatibility
       lastUpdated: credits?.updated_at || new Date().toISOString()
     };
+
+    // Try to get the additional columns if they exist
+    try {
+      const { data: extraData, error: extraError } = await supabase
+        .from('credits')
+        .select('total_added, total_used')
+        .eq('user_id', userId)
+        .single();
+        
+      if (!extraError && extraData) {
+        creditsResponse.totalAdded = extraData.total_added || 0;
+        creditsResponse.totalUsed = extraData.total_used || 0;
+      }
+    } catch (extraErr) {
+      // Silently handle missing columns
+      logger.warn(`Credits table is missing some columns, using defaults`, {
+        sessionId,
+        userId
+      });
+    }
 
     // Cache the credits if Redis is available
     if (redisClient.isReady) {

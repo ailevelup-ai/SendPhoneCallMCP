@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS credits (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id),
   balance DECIMAL NOT NULL DEFAULT 0,
+  total_added DECIMAL NOT NULL DEFAULT 0,
+  total_used DECIMAL NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -87,4 +89,12 @@ CREATE TABLE IF NOT EXISTS api_usage (
   response_time INTEGER, -- in milliseconds
   credits_used DECIMAL,
   created_at TIMESTAMPTZ DEFAULT NOW()
-); 
+);
+
+-- Create exec_sql function for executing SQL statements
+CREATE OR REPLACE FUNCTION exec_sql(sql text)
+RETURNS void AS $$
+BEGIN
+  EXECUTE sql;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER; 

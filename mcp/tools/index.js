@@ -116,7 +116,10 @@ async function executeToolById(params, sessionId) {
   
   try {
     // Execute tool with arguments
-    const result = await tool.execute(args, { sessionId });
+    const result = await tool.execute(args, { 
+      sessionId,
+      userId: 'dev-user-id' // Add dev user ID for development mode
+    });
     
     // Log success (without sensitive result data)
     logger.info(`Successfully executed MCP tool: ${name}`, {

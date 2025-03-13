@@ -8,7 +8,7 @@ app.use(express.json());
 // Root route for API info
 app.get('/api/v1', (req, res) => {
   res.json({
-    name: 'Bland.AI MCP Wrapper API',
+    name: 'AILevelUp MCP Wrapper API',
     version: '1.0.0',
     endpoints: {
       phoneCalls: '/api/v1/phone-calls',

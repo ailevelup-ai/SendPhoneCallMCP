@@ -45,8 +45,9 @@ router.get('/', (req, res) => {
   endpoints.call = '/api/v1/call';
 
   res.json({
-    name: 'Bland.AI MCP Wrapper API',
+    name: 'ailevelup.AI MCP Wrapper API',
     version: '1.0.0',
+    status: 'operational',
     endpoints
   });
 });

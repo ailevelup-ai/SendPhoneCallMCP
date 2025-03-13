@@ -1,157 +1,89 @@
-# SendPhoneCall MCP Server
+# ailevelup.AI MCP Wrapper
 
-This repository contains the MCP (Model Control Protocol) server implementation for the SendPhoneCall service, which enables AI-powered phone calls.
+A Mission Control Panel (MCP) wrapper for the ailevelup.AI phone call API, providing enhanced functionality, monitoring, and integration capabilities.
+
+## Features
+
+- Make AI phone calls using ailevelup.AI's API
+- Real-time call monitoring and status updates
+- Call history and transcripts
+- Voice and model selection
+- Integration with Google Sheets for call tracking
+- Supabase database integration for data persistence
+- Content moderation and safety checks
+- Audit logging and monitoring
+- Rate limiting and quota management
+- Error handling and retry logic
+- Webhook support for call status updates
 
 ## Prerequisites
 
-- Node.js (v14 or higher)
-- Supabase account and project
-- Environment variables set up (see below)
+1. ailevelup.AI Enterprise API key
+2. Google Cloud Service Account (for Sheets integration)
+3. Supabase account and project
+4. Node.js 18+ and npm/yarn
+5. Redis (for rate limiting)
+6. PostgreSQL database
 
 ## Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
+Copy `.env.example` to `.env` and fill in your values:
 
-```
-PORT=3040
-NODE_ENV=development
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_service_key
-BYPASS_MCP_AUTH=true  # Only for development
-```
-
-## Database Setup
-
-There are three ways to set up the necessary database tables in Supabase:
-
-### Option 1: Execute SQL in Supabase SQL Editor
-1. Create a Supabase project if you haven't already
-2. Go to the SQL Editor in your Supabase dashboard
-3. Copy the contents of `direct-supabase-setup.sql` and execute it in the SQL Editor
-
-### Option 2: Use the direct setup script
 ```bash
-node direct-setup-database.js
+# API Keys
+AILEVELUP_ENTERPRISE_API_KEY=your_ailevelup_enterprise_api_key
+AILEVELUP_ENCRYPTED_KEY=your_ailevelup_encrypted_key
+
+# Other configurations as listed in .env.example
 ```
 
-### Option 3: Use the function-based setup (requires SQL functions to be set up first)
-1. Execute the SQL in `supabase-setup.sql` in the Supabase SQL Editor to create the necessary functions
-2. Run the database setup script:
+## Installation
+
 ```bash
-node setup-database.js
+# Install dependencies
+npm install
+
+# Set up the database
+npm run db:setup
+
+# Start Redis
+redis-server
+
+# Start the development server
+npm run dev
 ```
 
-Regardless of the method used, this will create the following tables:
-- `user_settings`: Stores user preferences for phone calls
-- `call_history`: Records history of phone calls made
-- `credits`: Manages user credit balance for making calls
+## API Documentation
 
-## Starting the Server
+### Make a Phone Call
 
-Before starting the server, make sure no other instance is running on port 3040:
-```bash
-# Kill any existing server process
-pkill -f "node server.js"
+```javascript
+POST /api/v1/calls
+
+{
+  "phone_number": "+1234567890",
+  "task": "Schedule an appointment for next week",
+  "voice": "alloy",  // Optional, defaults to 'alloy'
+  "from_number": "+1987654321",  // Optional
+  "model": "turbo",  // Optional, defaults to 'turbo'
+  "temperature": 0.7  // Optional, defaults to 0.7
+}
 ```
 
-Then start the server:
-```bash
-node server.js
-```
+See the [API Documentation](docs/API.md) for more endpoints and details.
 
-For development with authentication bypass:
-```bash
-NODE_ENV=development BYPASS_MCP_AUTH=true node server.js
-```
+## Contributing
 
-To run in the background:
-```bash
-NODE_ENV=development BYPASS_MCP_AUTH=true node server.js &
-```
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-## API Endpoints
+## License
 
-### Health Check
-```
-GET /health
-```
+MIT License - see [LICENSE](LICENSE) for details.
 
-### MCP API
-```
-POST /api/v1/mcp
-```
+## Support
 
-## Available Tools
-
-The MCP server provides the following tools:
-
-### getModelOptions
-Returns available AI model options for phone calls.
-
-### getVoiceOptions
-Returns available voice options for phone calls.
-
-### updateCallPreferences
-Updates a user's default preferences for phone calls.
-
-Parameters:
-- `defaultVoice`: Default voice to use (string)
-- `defaultModel`: Default AI model to use (string)
-- `defaultTemperature`: Default temperature setting (0.0-1.0)
-- `defaultFromNumber`: Default phone number to make calls from (E.164 format)
-- `defaultVoicemailAction`: Action to take when voicemail is detected (leave_message, hang_up, retry_later)
-
-### makePhoneCall
-Initiates a phone call.
-
-Parameters:
-- `toNumber`: Phone number to call (E.164 format)
-- `fromNumber`: Phone number to call from (E.164 format)
-- `voiceId`: Voice to use
-- `modelId`: AI model to use
-- `temperature`: Temperature setting (0.0-1.0)
-- `instructions`: Instructions for the AI
-
-## Testing the API
-
-Initialize a session:
-```bash
-curl -X POST http://localhost:3040/api/v1/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"initialize","params":{"clientName":"test-client","clientVersion":"1.0.0"},"id":1}'
-```
-
-Execute a tool (example: getModelOptions):
-```bash
-curl -X POST http://localhost:3040/api/v1/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer SESSION_ID" \
-  -d '{"jsonrpc":"2.0","method":"tools/execute","params":{"name":"getModelOptions","arguments":{}},"id":2}'
-```
-
-## Implementation Plan Progress
-
-See `mcp-implementation-plan-progress.md` for the current status of the implementation plan.
-
-## Troubleshooting
-
-### Missing Dependencies
-If you see errors about missing modules, install them:
-```bash
-npm install jsonschema
-```
-
-### Port Already in Use
-If you see "Error: listen EADDRINUSE: address already in use :::3040", kill the existing process:
-```bash
-pkill -f "node server.js"
-```
-
-### Database Connection Issues
-If the server fails to connect to the database, verify your `.env` file contains the correct Supabase URL and key.
-
-### Database Tables Not Found
-If you encounter "relation does not exist" errors, run the database setup using the direct method:
-```bash
-node direct-setup-database.js
-``` 
+For support, email support@ailevelup.ai or open an issue in this repository. 

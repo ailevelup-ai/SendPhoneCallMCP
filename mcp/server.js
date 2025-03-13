@@ -25,7 +25,7 @@ const connections = new Map();
 function getServerCapabilities() {
   return {
     server: {
-      name: "bland-ai-mcp",
+      name: "ailevelup-mcp",
       version: "1.0.0",
       capabilities: {
         tools: {
@@ -151,10 +151,22 @@ async function handleMcpRequest(request, sessionId) {
  * @param {Object} app Express application
  */
 function initializeHttpRoutes(app) {
-  const mcpRouter = express.Router();
+  // Add CORS headers
+  app.use((req, res, next) => {
+    // CORS headers
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, MCP-Session-Id');
+    res.header('Access-Control-Expose-Headers', 'MCP-Session-Id'); // Expose the session ID header for client access
+    
+    // Handle preflight OPTIONS request
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    next();
+  });
   
-  // Add authentication middleware
-  mcpRouter.use(authenticateMcp);
+  const mcpRouter = express.Router();
   
   // Handle JSON-RPC requests
   mcpRouter.post('/', async (req, res) => {

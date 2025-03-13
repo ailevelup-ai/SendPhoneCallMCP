@@ -19,7 +19,7 @@ const CallTranscript = ({ transcript, isLoading }) => {
     
     return lines.map((line, index) => {
       // Check if line starts with a speaker label (AI: or Human:)
-      const aiMatch = line.match(/^(AI|Assistant|Bland|System):\s*(.*)/i);
+      const aiMatch = line.match(/^(AI|Assistant|ailevelup|System):\s*(.*)/i);
       const humanMatch = line.match(/^(Human|User|Person|Customer|Caller):\s*(.*)/i);
       
       if (aiMatch) {
@@ -38,7 +38,7 @@ const CallTranscript = ({ transcript, isLoading }) => {
         );
       } else {
         // Try to detect if this is part of a previous speaker's message
-        const isAIPart = index > 0 && lines[index - 1].match(/^(AI|Assistant|Bland|System):/i);
+        const isAIPart = index > 0 && lines[index - 1].match(/^(AI|Assistant|ailevelup|System):/i);
         const isHumanPart = index > 0 && lines[index - 1].match(/^(Human|User|Person|Customer|Caller):/i);
         
         if (isAIPart) {

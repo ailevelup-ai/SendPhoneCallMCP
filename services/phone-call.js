@@ -5,12 +5,12 @@ const { moderateContent } = require('./content-moderation');
 const logger = require('./logging');
 const { getAutoTopupSettings, processAutoTopup } = require('./auto-topup');
 
-// Bland.AI API configuration
-const BLAND_API_KEY = process.env.BLAND_API_KEY;
-const BLAND_API_URL = process.env.BLAND_API_URL || 'https://api.bland.ai';
+// ailevelup.AI API configuration
+const AILEVELUP_API_KEY = process.env.AILEVELUP_API_KEY;
+const AILEVELUP_API_URL = process.env.AILEVELUP_API_URL || 'https://api.ailevelup.ai';
 
 /**
- * Send a phone call using Bland.AI
+ * Send a phone call using ailevelup.AI
  * @param {Object} callData - Call data including phoneNumber, script, voiceId, etc.
  * @param {string} userId - User ID making the request
  * @returns {Object} - Call details including callId and status
@@ -68,32 +68,29 @@ async function sendCall(callData, userId) {
       }
     }
 
-    // Prepare call data for Bland.AI
-    const blandCallData = {
+    // Prepare call data for ailevelup.AI
+    const ailevelupCallData = {
       phone_number: callData.phoneNumber,
       task: callData.script,
-      voice_id: callData.voiceId || 'male-voice-1', // Default voice if not specified
-      reduce_latency: callData.reduceLatency || true,
-      wait_for_greeting: callData.waitForGreeting || true,
-      interruptions_enabled: callData.interruptionsEnabled !== false, // Default to true
-      request_data: {
-        user_id: userId,
-        custom_call_id: callData.customCallId || null,
-        metadata: callData.metadata || {}
-      }
+      voice: callData.voice || defaultVoice,
+      from_number: callData.fromNumber || defaultFromNumber,
+      model: callData.model || defaultModel,
+      temperature: callData.temperature || defaultTemperature,
+      voicemail_action: callData.voicemailAction || defaultVoicemailAction,
+      answered_by_enabled: callData.answeredByEnabled ?? defaultAnsweredByEnabled
     };
 
     // Add optional parameters if provided
-    if (callData.maxDuration) blandCallData.max_duration = callData.maxDuration;
-    if (callData.webhookUrl) blandCallData.webhook_url = callData.webhookUrl;
-    if (callData.recordingEnabled !== undefined) blandCallData.recording_enabled = callData.recordingEnabled;
-    if (callData.amdConfig) blandCallData.amd_config = callData.amdConfig;
-    if (callData.transferConfig) blandCallData.transfer_config = callData.transferConfig;
+    if (callData.maxDuration) ailevelupCallData.max_duration = callData.maxDuration;
+    if (callData.webhookUrl) ailevelupCallData.webhook_url = callData.webhookUrl;
+    if (callData.recordingEnabled !== undefined) ailevelupCallData.recording_enabled = callData.recordingEnabled;
+    if (callData.amdConfig) ailevelupCallData.amd_config = callData.amdConfig;
+    if (callData.transferConfig) ailevelupCallData.transfer_config = callData.transferConfig;
 
-    // Make API call to Bland.AI
-    const response = await axios.post(`${BLAND_API_URL}/v1/calls`, blandCallData, {
+    // Make API call to ailevelup.AI
+    const response = await axios.post(`${AILEVELUP_API_URL}/v1/calls`, ailevelupCallData, {
       headers: {
-        'Authorization': `Bearer ${BLAND_API_KEY}`,
+        'Authorization': `Bearer ${AILEVELUP_API_KEY}`,
         'Content-Type': 'application/json'
       }
     });
@@ -106,7 +103,7 @@ async function sendCall(callData, userId) {
       .from('calls')
       .insert({
         user_id: userId,
-        bland_call_id: response.data.call_id,
+        ailevelup_call_id: response.data.call_id,
         phone_number: callData.phoneNumber,
         script: callData.script,
         status: 'initiated',
@@ -143,9 +140,9 @@ async function sendCall(callData, userId) {
       callData: { ...callData, script: 'REDACTED' } // Don't log the full script for privacy
     });
 
-    // Check if it's an API error from Bland.AI
-    if (error.response && error.response.data) {
-      throw new Error(`Bland.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+    // Check if it's an API error from ailevelup.AI
+    if (error.response) {
+      throw new Error(`ailevelup.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
     }
     
     throw error;
@@ -153,8 +150,8 @@ async function sendCall(callData, userId) {
 }
 
 /**
- * Get call details from Bland.AI
- * @param {string} callId - Bland.AI call ID
+ * Get call details from ailevelup.AI
+ * @param {string} callId - ailevelup.AI call ID
  * @param {string} userId - User ID making the request
  * @returns {Object} - Call details
  */
@@ -164,7 +161,7 @@ async function getCallDetails(callId, userId) {
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
       .select('*')
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .eq('user_id', userId)
       .single();
 
@@ -172,10 +169,10 @@ async function getCallDetails(callId, userId) {
       throw new Error('Call not found or not authorized to access this call');
     }
 
-    // Get call details from Bland.AI
-    const response = await axios.get(`${BLAND_API_URL}/v1/calls/${callId}`, {
+    // Get call details from ailevelup.AI
+    const response = await axios.get(`${AILEVELUP_API_URL}/v1/calls/${callId}`, {
       headers: {
-        'Authorization': `Bearer ${BLAND_API_KEY}`
+        'Authorization': `Bearer ${AILEVELUP_API_KEY}`
       }
     });
 
@@ -184,7 +181,7 @@ async function getCallDetails(callId, userId) {
       const { error: updateError } = await supabase
         .from('calls')
         .update({ status: response.data.status, updated_at: new Date() })
-        .eq('bland_call_id', callId);
+        .eq('ailevelup_call_id', callId);
 
       if (updateError) {
         logger.error('Failed to update call status', { callId, error: updateError.message });
@@ -200,9 +197,9 @@ async function getCallDetails(callId, userId) {
   } catch (error) {
     logger.error('Failed to get call details', { callId, userId, error: error.message });
     
-    // Check if it's an API error from Bland.AI
-    if (error.response && error.response.data) {
-      throw new Error(`Bland.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+    // Check if it's an API error from ailevelup.AI
+    if (error.response) {
+      throw new Error(`ailevelup.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
     }
     
     throw error;
@@ -211,7 +208,7 @@ async function getCallDetails(callId, userId) {
 
 /**
  * Stop an ongoing call
- * @param {string} callId - Bland.AI call ID
+ * @param {string} callId - ailevelup.AI call ID
  * @param {string} userId - User ID making the request
  * @returns {Object} - Result of the stop operation
  */
@@ -221,7 +218,7 @@ async function stopCall(callId, userId) {
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
       .select('*')
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .eq('user_id', userId)
       .single();
 
@@ -229,10 +226,10 @@ async function stopCall(callId, userId) {
       throw new Error('Call not found or not authorized to stop this call');
     }
 
-    // Stop the call via Bland.AI
-    const response = await axios.post(`${BLAND_API_URL}/v1/calls/${callId}/stop`, {}, {
+    // Stop the call via ailevelup.AI
+    const response = await axios.post(`${AILEVELUP_API_URL}/v1/calls/${callId}/stop`, {}, {
       headers: {
-        'Authorization': `Bearer ${BLAND_API_KEY}`,
+        'Authorization': `Bearer ${AILEVELUP_API_KEY}`,
         'Content-Type': 'application/json'
       }
     });
@@ -241,7 +238,7 @@ async function stopCall(callId, userId) {
     const { error: updateError } = await supabase
       .from('calls')
       .update({ status: 'stopped', updated_at: new Date() })
-      .eq('bland_call_id', callId);
+      .eq('ailevelup_call_id', callId);
 
     if (updateError) {
       logger.error('Failed to update call status after stopping', { callId, error: updateError.message });
@@ -257,9 +254,9 @@ async function stopCall(callId, userId) {
   } catch (error) {
     logger.error('Failed to stop call', { callId, userId, error: error.message });
     
-    // Check if it's an API error from Bland.AI
-    if (error.response && error.response.data) {
-      throw new Error(`Bland.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+    // Check if it's an API error from ailevelup.AI
+    if (error.response) {
+      throw new Error(`ailevelup.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
     }
     
     throw error;
@@ -267,8 +264,8 @@ async function stopCall(callId, userId) {
 }
 
 /**
- * Analyze a call using Bland.AI
- * @param {string} callId - Bland.AI call ID
+ * Analyze a call using ailevelup.AI
+ * @param {string} callId - ailevelup.AI call ID
  * @param {string} userId - User ID making the request
  * @param {Object} options - Analysis options
  * @returns {Object} - Analysis results
@@ -279,7 +276,7 @@ async function analyzeCall(callId, userId, options = {}) {
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
       .select('*')
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .eq('user_id', userId)
       .single();
 
@@ -292,10 +289,10 @@ async function analyzeCall(callId, userId, options = {}) {
       ...options
     };
 
-    // Request analysis from Bland.AI
-    const response = await axios.post(`${BLAND_API_URL}/v1/calls/${callId}/analyze`, analysisOptions, {
+    // Request analysis from ailevelup.AI
+    const response = await axios.post(`${AILEVELUP_API_URL}/v1/calls/${callId}/analyze`, analysisOptions, {
       headers: {
-        'Authorization': `Bearer ${BLAND_API_KEY}`,
+        'Authorization': `Bearer ${AILEVELUP_API_KEY}`,
         'Content-Type': 'application/json'
       }
     });
@@ -306,7 +303,7 @@ async function analyzeCall(callId, userId, options = {}) {
       .insert({
         call_id: callRecord.id,
         user_id: userId,
-        bland_call_id: callId,
+        ailevelup_call_id: callId,
         analysis_data: response.data,
         analysis_type: options.analysisType || 'standard'
       });
@@ -322,9 +319,9 @@ async function analyzeCall(callId, userId, options = {}) {
   } catch (error) {
     logger.error('Failed to analyze call', { callId, userId, error: error.message });
     
-    // Check if it's an API error from Bland.AI
-    if (error.response && error.response.data) {
-      throw new Error(`Bland.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+    // Check if it's an API error from ailevelup.AI
+    if (error.response) {
+      throw new Error(`ailevelup.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
     }
     
     throw error;
@@ -332,8 +329,8 @@ async function analyzeCall(callId, userId, options = {}) {
 }
 
 /**
- * Get call recording from Bland.AI
- * @param {string} callId - Bland.AI call ID
+ * Get call recording from ailevelup.AI
+ * @param {string} callId - ailevelup.AI call ID
  * @param {string} userId - User ID making the request
  * @returns {Object} - Recording URL and details
  */
@@ -343,7 +340,7 @@ async function getCallRecording(callId, userId) {
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
       .select('*')
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .eq('user_id', userId)
       .single();
 
@@ -351,10 +348,10 @@ async function getCallRecording(callId, userId) {
       throw new Error('Call not found or not authorized to access this recording');
     }
 
-    // Get recording from Bland.AI
-    const response = await axios.get(`${BLAND_API_URL}/v1/calls/${callId}/recording`, {
+    // Get recording from ailevelup.AI
+    const response = await axios.get(`${AILEVELUP_API_URL}/v1/calls/${callId}/recording`, {
       headers: {
-        'Authorization': `Bearer ${BLAND_API_KEY}`
+        'Authorization': `Bearer ${AILEVELUP_API_KEY}`
       },
       responseType: 'stream' // Stream the response
     });
@@ -369,9 +366,9 @@ async function getCallRecording(callId, userId) {
   } catch (error) {
     logger.error('Failed to get call recording', { callId, userId, error: error.message });
     
-    // Check if it's an API error from Bland.AI
-    if (error.response && error.response.data) {
-      throw new Error(`Bland.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+    // Check if it's an API error from ailevelup.AI
+    if (error.response) {
+      throw new Error(`ailevelup.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
     }
     
     throw error;
@@ -380,7 +377,7 @@ async function getCallRecording(callId, userId) {
 
 /**
  * Get corrected transcript for a call
- * @param {string} callId - Bland.AI call ID
+ * @param {string} callId - ailevelup.AI call ID
  * @param {string} userId - User ID making the request
  * @returns {Object} - Transcript data
  */
@@ -390,7 +387,7 @@ async function getCorrectedTranscript(callId, userId) {
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
       .select('*')
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .eq('user_id', userId)
       .single();
 
@@ -398,10 +395,10 @@ async function getCorrectedTranscript(callId, userId) {
       throw new Error('Call not found or not authorized to access this transcript');
     }
 
-    // Get transcript from Bland.AI
-    const response = await axios.get(`${BLAND_API_URL}/v1/calls/${callId}/transcript`, {
+    // Get transcript from ailevelup.AI
+    const response = await axios.get(`${AILEVELUP_API_URL}/v1/calls/${callId}/transcript`, {
       headers: {
-        'Authorization': `Bearer ${BLAND_API_KEY}`
+        'Authorization': `Bearer ${AILEVELUP_API_KEY}`
       }
     });
 
@@ -409,7 +406,7 @@ async function getCorrectedTranscript(callId, userId) {
     const { data: existingTranscript, error: checkError } = await supabase
       .from('call_transcripts')
       .select('id')
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .single();
 
     if (!existingTranscript && !checkError) {
@@ -418,7 +415,7 @@ async function getCorrectedTranscript(callId, userId) {
         .insert({
           call_id: callRecord.id,
           user_id: userId,
-          bland_call_id: callId,
+          ailevelup_call_id: callId,
           transcript_data: response.data,
           transcript_type: 'corrected'
         });
@@ -434,9 +431,9 @@ async function getCorrectedTranscript(callId, userId) {
   } catch (error) {
     logger.error('Failed to get call transcript', { callId, userId, error: error.message });
     
-    // Check if it's an API error from Bland.AI
-    if (error.response && error.response.data) {
-      throw new Error(`Bland.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+    // Check if it's an API error from ailevelup.AI
+    if (error.response) {
+      throw new Error(`ailevelup.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
     }
     
     throw error;
@@ -445,7 +442,7 @@ async function getCorrectedTranscript(callId, userId) {
 
 /**
  * Get event stream for a call
- * @param {string} callId - Bland.AI call ID
+ * @param {string} callId - ailevelup.AI call ID
  * @param {string} userId - User ID making the request
  * @returns {Object} - Event stream
  */
@@ -455,7 +452,7 @@ async function getEventStream(callId, userId) {
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
       .select('*')
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .eq('user_id', userId)
       .single();
 
@@ -463,10 +460,10 @@ async function getEventStream(callId, userId) {
       throw new Error('Call not found or not authorized to access this event stream');
     }
 
-    // Get event stream from Bland.AI
-    const response = await axios.get(`${BLAND_API_URL}/v1/calls/${callId}/events`, {
+    // Get event stream from ailevelup.AI
+    const response = await axios.get(`${AILEVELUP_API_URL}/v1/calls/${callId}/events`, {
       headers: {
-        'Authorization': `Bearer ${BLAND_API_KEY}`
+        'Authorization': `Bearer ${AILEVELUP_API_KEY}`
       },
       responseType: 'stream' // Stream the response
     });
@@ -480,9 +477,9 @@ async function getEventStream(callId, userId) {
   } catch (error) {
     logger.error('Failed to get call event stream', { callId, userId, error: error.message });
     
-    // Check if it's an API error from Bland.AI
-    if (error.response && error.response.data) {
-      throw new Error(`Bland.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+    // Check if it's an API error from ailevelup.AI
+    if (error.response) {
+      throw new Error(`ailevelup.AI API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
     }
     
     throw error;
@@ -553,7 +550,7 @@ async function getUserCallHistory(userId, options = {}) {
 
 /**
  * Update call metadata
- * @param {string} callId - Bland.AI call ID
+ * @param {string} callId - ailevelup.AI call ID
  * @param {string} userId - User ID making the request
  * @param {Object} metadata - New metadata to store
  * @returns {Object} - Updated call record
@@ -564,7 +561,7 @@ async function updateCallMetadata(callId, userId, metadata) {
     const { data: callRecord, error: callError } = await supabase
       .from('calls')
       .select('*')
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .eq('user_id', userId)
       .single();
 
@@ -579,7 +576,7 @@ async function updateCallMetadata(callId, userId, metadata) {
         metadata: { ...callRecord.metadata, ...metadata },
         updated_at: new Date()
       })
-      .eq('bland_call_id', callId)
+      .eq('ailevelup_call_id', callId)
       .select()
       .single();
 

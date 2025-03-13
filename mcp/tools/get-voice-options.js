@@ -1,7 +1,7 @@
 /**
  * MCP Tool: Get Voice Options
  * 
- * This tool retrieves the available voice options for Bland.AI phone calls.
+ * This tool retrieves the available voice options for ailevelup.AI phone calls.
  */
 
 const { JSONSchemaValidator } = require('../lib/validators');
@@ -20,50 +20,50 @@ const VOICE_OPTIONS = [
   {
     id: 'alloy',
     name: 'Alloy',
-    description: 'Neutral, versatile voice with a balanced tone',
-    gender: 'gender-neutral',
+    description: 'Clear and professional voice',
+    gender: 'neutral',
     useCase: 'general purpose',
-    sample: 'https://api.bland.ai/samples/alloy.mp3'
+    sample: 'https://api.ailevelup.ai/samples/alloy.mp3'
   },
   {
     id: 'echo',
     name: 'Echo',
-    description: 'Deep, resonant male voice with a confident tone',
-    gender: 'male',
+    description: 'Resonant and dynamic voice',
+    gender: 'neutral',
     useCase: 'professional services',
-    sample: 'https://api.bland.ai/samples/echo.mp3'
+    sample: 'https://api.ailevelup.ai/samples/echo.mp3'
   },
   {
     id: 'fable',
     name: 'Fable',
-    description: 'Warm, friendly female voice with a soft tone',
-    gender: 'female',
+    description: 'Engaging storyteller voice',
+    gender: 'neutral',
     useCase: 'customer service',
-    sample: 'https://api.bland.ai/samples/fable.mp3'
+    sample: 'https://api.ailevelup.ai/samples/fable.mp3'
   },
   {
     id: 'onyx',
     name: 'Onyx',
-    description: 'Deep, authoritative male voice with a rich tone',
-    gender: 'male',
+    description: 'Deep and authoritative voice',
+    gender: 'neutral',
     useCase: 'business calls',
-    sample: 'https://api.bland.ai/samples/onyx.mp3'
+    sample: 'https://api.ailevelup.ai/samples/onyx.mp3'
   },
   {
     id: 'nova',
     name: 'Nova',
-    description: 'Clear, articulate female voice with a professional tone',
-    gender: 'female',
+    description: 'Warm and friendly voice',
+    gender: 'neutral',
     useCase: 'information services',
-    sample: 'https://api.bland.ai/samples/nova.mp3'
+    sample: 'https://api.ailevelup.ai/samples/nova.mp3'
   },
   {
     id: 'shimmer',
     name: 'Shimmer',
-    description: 'Energetic, bright female voice with an engaging tone',
-    gender: 'female',
+    description: 'Bright and energetic voice',
+    gender: 'neutral',
     useCase: 'sales and marketing',
-    sample: 'https://api.bland.ai/samples/shimmer.mp3'
+    sample: 'https://api.ailevelup.ai/samples/shimmer.mp3'
   }
 ];
 
@@ -123,7 +123,7 @@ async function execute(params, context) {
       }
     }
 
-    // For future implementation: call Bland.AI API to get the latest voice options
+    // For future implementation: call ailevelup.AI API to get the latest voice options
     // For now, return the hardcoded options
 
     // Cache the voice options if Redis is available

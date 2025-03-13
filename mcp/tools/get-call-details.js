@@ -1,7 +1,7 @@
 /**
  * MCP Tool: Get Call Details
  * 
- * This tool retrieves detailed information about a specific call made through Bland.AI.
+ * This tool retrieves detailed information about a specific call made through ailevelup.AI.
  */
 
 const { JSONSchemaValidator } = require('../lib/validators');
@@ -86,30 +86,30 @@ async function execute(params, context) {
       throw new Error('Call not found or you are not authorized to access it');
     }
 
-    // If call is completed or in progress, fetch additional details from Bland.AI
-    let blandAIDetails = null;
+    // If call is completed or in progress, fetch additional details from ailevelup.AI
+    let ailevelupAIDetails = null;
     if (['completed', 'in_progress'].includes(callData.status)) {
       try {
         const response = await axios.get(
           `https://api.bland.ai/v1/calls/${callId}`,
           {
             headers: {
-              'Authorization': `Bearer ${process.env.BLAND_ENTERPRISE_API_KEY}`,
+              'Authorization': `Bearer ${process.env.AILEVELUP_ENTERPRISE_API_KEY}`,
               'Content-Type': 'application/json'
             }
           }
         );
 
         if (response.data && response.data.status === 'success') {
-          blandAIDetails = response.data.call || null;
+          ailevelupAIDetails = response.data.call || null;
         }
-      } catch (apiError) {
-        logger.warn(`Failed to get additional details from Bland.AI API for call ${callId}`, {
+      } catch (error) {
+        logger.warn(`Failed to get additional details from ailevelup.AI API for call ${callId}`, {
           sessionId,
-          callId,
-          error: apiError.message
+          userId,
+          error: error.message
         });
-        // Continue execution even if Bland.AI API fails
+        // Continue execution even if ailevelup.AI API fails
       }
     }
 
@@ -131,15 +131,15 @@ async function execute(params, context) {
       updatedAt: callData.updated_at
     };
 
-    // Add Bland.AI specific details if available
-    if (blandAIDetails) {
-      callDetails.blandDetails = {
-        status: blandAIDetails.status,
-        transcript: blandAIDetails.transcript || null,
-        recordingUrl: blandAIDetails.recording_url || null,
-        callLengthSeconds: blandAIDetails.call_length_seconds || 0,
-        answeredBy: blandAIDetails.answered_by || null,
-        cost: blandAIDetails.cost || null
+    // Add ailevelup.AI specific details if available
+    if (ailevelupAIDetails) {
+      callDetails.ailevelupDetails = {
+        status: ailevelupAIDetails.status,
+        transcript: ailevelupAIDetails.transcript || null,
+        recordingUrl: ailevelupAIDetails.recording_url || null,
+        callLengthSeconds: ailevelupAIDetails.call_length_seconds || 0,
+        answeredBy: ailevelupAIDetails.answered_by || null,
+        cost: ailevelupAIDetails.cost || null
       };
     }
 

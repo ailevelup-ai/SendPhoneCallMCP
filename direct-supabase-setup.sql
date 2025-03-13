@@ -180,4 +180,20 @@ ON CONFLICT (user_id) DO NOTHING;
 INSERT INTO public.credits (user_id, balance, total_added, total_used)
 VALUES 
   ('dev-user-id', 100, 100, 0)
-ON CONFLICT (user_id) DO NOTHING; 
+ON CONFLICT (user_id) DO NOTHING;
+
+-- Create the exec_sql function first
+CREATE OR REPLACE FUNCTION public.exec_sql(sql text)
+RETURNS void AS $$
+BEGIN
+  EXECUTE sql;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION public.exec_sql TO authenticated;
+
+-- Create tables using our existing functions
+SELECT create_user_settings_table();
+SELECT create_call_history_table();
+SELECT create_credits_table(); 

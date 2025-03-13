@@ -1,4 +1,4 @@
-// Content Moderation Service for Bland.AI MCP Wrapper
+// Content Moderation Service for ailevelup.AI MCP Wrapper
 const OpenAI = require('openai');
 
 // Initialize OpenAI client

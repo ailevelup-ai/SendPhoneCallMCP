@@ -6,19 +6,22 @@ const { moderateContent } = require('../services/content-moderation');
 const { logCallToGoogleSheets } = require('../google-sheets-logging');
 const { supabaseAdmin } = require('../config/supabase');
 
+// Get API URL from environment variables
+const AILEVELUP_API_URL = process.env.AILEVELUP_API_URL || 'https://api.ailevelup.ai';
+
 // Make a phone call
 router.post('/call', validateApiKey, async (req, res) => {
   try {
     const {
       phone_number,
       task,
-      voice = process.env.BLAND_DEFAULT_VOICE || 'nat',
+      voice = process.env.AILEVELUP_DEFAULT_VOICE || 'nat',
       webhook_url,
-      from_number = process.env.BLAND_DEFAULT_FROM_NUMBER,
-      model = process.env.BLAND_DEFAULT_MODEL || 'turbo',
-      temperature = parseFloat(process.env.BLAND_DEFAULT_TEMPERATURE) || 1,
-      voicemail_action = process.env.BLAND_DEFAULT_VOICEMAIL_ACTION || 'hangup',
-      answered_by_enabled = process.env.BLAND_ANSWERED_BY_ENABLED === 'true',
+      from_number = process.env.AILEVELUP_DEFAULT_FROM_NUMBER,
+      model = process.env.AILEVELUP_DEFAULT_MODEL || 'turbo',
+      temperature = parseFloat(process.env.AILEVELUP_DEFAULT_TEMPERATURE) || 1,
+      voicemail_action = process.env.AILEVELUP_DEFAULT_VOICEMAIL_ACTION || 'hangup',
+      answered_by_enabled = process.env.AILEVELUP_ANSWERED_BY_ENABLED === 'true',
       max_duration
     } = req.body;
 
@@ -51,7 +54,7 @@ router.post('/call', validateApiKey, async (req, res) => {
       });
     }
 
-    console.log('Making call to Bland.AI:', {
+    console.log('Making call to ailevelup.AI:', {
       phone_number,
       task,
       voice,
@@ -64,13 +67,13 @@ router.post('/call', validateApiKey, async (req, res) => {
       max_duration: calculatedMaxDuration
     });
 
-    // Make the call using Bland.AI API
-    const response = await fetch('https://api.bland.ai/v1/calls', {
+    // Make the call using ailevelup.AI API
+    const response = await fetch(`${AILEVELUP_API_URL}/v1/calls`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.BLAND_ENTERPRISE_API_KEY}`,
-        'X-Encrypted-Key': process.env.BLAND_ENCRYPTED_KEY
+        'Authorization': `Bearer ${process.env.AILEVELUP_ENTERPRISE_API_KEY}`,
+        'X-Encrypted-Key': process.env.AILEVELUP_ENCRYPTED_KEY
       },
       body: JSON.stringify({
         phone_number,
@@ -87,10 +90,10 @@ router.post('/call', validateApiKey, async (req, res) => {
     });
 
     const callData = await response.json();
-    console.log('Bland.AI response:', callData);
+    console.log('ailevelup.AI response:', callData);
 
     if (!response.ok) {
-      console.error('Bland.AI API error:', {
+      console.error('ailevelup.AI API error:', {
         status: response.status,
         statusText: response.statusText,
         data: callData
@@ -279,6 +282,93 @@ router.get('/calls', validateApiKey, async (req, res) => {
   } catch (error) {
     console.error('Error getting call history:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get voice options
+router.get('/voice-options', validateApiKey, async (req, res) => {
+  try {
+    // Define available voices with their details
+    const voices = [
+      { id: 'nat', name: 'Nat (Male)', gender: 'male', description: 'Clear and professional' },
+      { id: 'nova', name: 'Nova (Female)', gender: 'female', description: 'Friendly and approachable' },
+      { id: 'dave', name: 'Dave (Male)', gender: 'male', description: 'Deep and authoritative' },
+      { id: 'bella', name: 'Bella (Female)', gender: 'female', description: 'Warm and empathetic' },
+      { id: 'amy', name: 'Amy (Female)', gender: 'female', description: 'Cheerful and energetic' },
+      { id: 'josh', name: 'Josh (Male)', gender: 'male', description: 'Casual and conversational' }
+    ];
+
+    res.json({
+      success: true,
+      voices
+    });
+  } catch (error) {
+    console.error('Error fetching voice options:', error);
+    res.status(500).json({ error: 'Failed to fetch voice options' });
+  }
+});
+
+// Get model options
+router.get('/model-options', validateApiKey, async (req, res) => {
+  try {
+    // Define available models with their details
+    const models = [
+      { 
+        id: 'turbo', 
+        name: 'Turbo (Fast)', 
+        description: 'Fast and efficient for most use cases',
+        speed: 'Fast',
+        price: 'Standard'
+      },
+      { 
+        id: 'claude', 
+        name: 'Claude (Balanced)', 
+        description: 'Good balance of performance and quality',
+        speed: 'Medium',
+        price: 'Premium'
+      },
+      { 
+        id: 'gpt-4', 
+        name: 'GPT-4 (Advanced)', 
+        description: 'Most capable for complex tasks',
+        speed: 'Slower',
+        price: 'Premium+'
+      }
+    ];
+
+    res.json({
+      success: true,
+      models
+    });
+  } catch (error) {
+    console.error('Error fetching model options:', error);
+    res.status(500).json({ error: 'Failed to fetch model options' });
+  }
+});
+
+// Get user credits
+router.get('/credits', validateApiKey, async (req, res) => {
+  try {
+    // Get user credits from database
+    const { data, error } = await supabaseAdmin
+      .from('credits')
+      .select('balance')
+      .eq('user_id', req.user.id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching user credits:', error);
+      return res.status(500).json({ error: 'Failed to fetch credits' });
+    }
+    
+    // Return credits
+    res.json({
+      success: true,
+      balance: data?.balance || 0
+    });
+  } catch (error) {
+    console.error('Error fetching user credits:', error);
+    res.status(500).json({ error: 'Failed to fetch credits' });
   }
 });
 
