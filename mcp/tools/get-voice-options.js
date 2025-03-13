@@ -4,7 +4,7 @@
  * This tool retrieves the available voice options for Bland.AI phone calls.
  */
 
-const { JSONSchemaValidator } = require('jsonschema');
+const { JSONSchemaValidator } = require('../lib/validators');
 const { logger } = require('../../utils/logger');
 const { redisClient } = require('../../config/redis');
 

@@ -7,12 +7,15 @@
 const { logger } = require('../../utils/logger');
 const makePhoneCallTool = require('./make-phone-call');
 const getCallDetailsTool = require('./get-call-details');
-const getCallHistoryTool = require('./get-call-history');
 const cancelCallTool = require('./cancel-call');
 const getCallProgressTool = require('./get-call-progress');
 const updateCallPreferencesTool = require('./update-call-preferences');
 const getVoiceOptionsTool = require('./get-voice-options');
 const getModelOptionsTool = require('./get-model-options');
+const getCallStatusTool = require('./get-call-status');
+const getCallHistoryTool = require('./get-call-history');
+const getCreditsTool = require('./get-credits');
+const addCreditsTool = require('./add-credits');
 
 // Registry for available tools
 const toolRegistry = new Map();
@@ -53,7 +56,6 @@ function registerTools() {
   // Register core phone call tools
   registerTool(makePhoneCallTool);
   registerTool(getCallDetailsTool);
-  registerTool(getCallHistoryTool);
   registerTool(cancelCallTool);
   
   // Register progress reporting tool
@@ -64,7 +66,11 @@ function registerTools() {
   registerTool(getVoiceOptionsTool);
   registerTool(getModelOptionsTool);
   
-  // Register additional tools as needed
+  // Register secondary tools
+  registerTool(getCallStatusTool);
+  registerTool(getCallHistoryTool);
+  registerTool(getCreditsTool);
+  registerTool(addCreditsTool);
   
   logger.info(`Registered ${toolRegistry.size} MCP tools`);
 }

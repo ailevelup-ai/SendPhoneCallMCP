@@ -22,29 +22,51 @@ BYPASS_MCP_AUTH=true  # Only for development
 
 ## Database Setup
 
-1. Create a Supabase project if you haven't already
-2. Execute the SQL in `supabase-setup.sql` in the Supabase SQL Editor to create the necessary functions
-3. Run the database setup script:
+There are three ways to set up the necessary database tables in Supabase:
 
+### Option 1: Execute SQL in Supabase SQL Editor
+1. Create a Supabase project if you haven't already
+2. Go to the SQL Editor in your Supabase dashboard
+3. Copy the contents of `direct-supabase-setup.sql` and execute it in the SQL Editor
+
+### Option 2: Use the direct setup script
+```bash
+node direct-setup-database.js
+```
+
+### Option 3: Use the function-based setup (requires SQL functions to be set up first)
+1. Execute the SQL in `supabase-setup.sql` in the Supabase SQL Editor to create the necessary functions
+2. Run the database setup script:
 ```bash
 node setup-database.js
 ```
 
-This will create the following tables:
+Regardless of the method used, this will create the following tables:
 - `user_settings`: Stores user preferences for phone calls
 - `call_history`: Records history of phone calls made
 - `credits`: Manages user credit balance for making calls
 
 ## Starting the Server
 
+Before starting the server, make sure no other instance is running on port 3040:
+```bash
+# Kill any existing server process
+pkill -f "node server.js"
+```
+
+Then start the server:
 ```bash
 node server.js
 ```
 
 For development with authentication bypass:
-
 ```bash
 NODE_ENV=development BYPASS_MCP_AUTH=true node server.js
+```
+
+To run in the background:
+```bash
+NODE_ENV=development BYPASS_MCP_AUTH=true node server.js &
 ```
 
 ## API Endpoints
@@ -109,4 +131,27 @@ curl -X POST http://localhost:3040/api/v1/mcp \
 
 ## Implementation Plan Progress
 
-See `mcp-implementation-plan-progress.md` for the current status of the implementation plan. 
+See `mcp-implementation-plan-progress.md` for the current status of the implementation plan.
+
+## Troubleshooting
+
+### Missing Dependencies
+If you see errors about missing modules, install them:
+```bash
+npm install jsonschema
+```
+
+### Port Already in Use
+If you see "Error: listen EADDRINUSE: address already in use :::3040", kill the existing process:
+```bash
+pkill -f "node server.js"
+```
+
+### Database Connection Issues
+If the server fails to connect to the database, verify your `.env` file contains the correct Supabase URL and key.
+
+### Database Tables Not Found
+If you encounter "relation does not exist" errors, run the database setup using the direct method:
+```bash
+node direct-setup-database.js
+``` 

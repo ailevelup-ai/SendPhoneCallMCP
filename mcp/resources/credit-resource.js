@@ -6,6 +6,7 @@
 
 const { logger } = require('../../utils/logger');
 const { supabase } = require('../../config/supabase');
+const { JSONSchemaValidator } = require('../lib/validators');
 
 // Define the resource schema
 const resourceSchema = {

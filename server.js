@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const { initializeSpreadsheet } = require('./google-sheets-logging');
 const routes = require('./routes');
 const { initializeDatabase } = require('./config/supabase');
+const { initializeMcpServer } = require('./mcp/server');
 
 // Initialize Express app
 const app = express();
@@ -94,11 +95,16 @@ async function startServer() {
       console.error('Database initialization failed, but continuing server startup:', error);
     }
 
-    app.listen(PORT, () => {
+    // Create HTTP server
+    const server = app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT} in ${NODE_ENV} mode`);
       console.log(`Health check available at: http://localhost:${PORT}/health`);
       console.log(`API available at: http://localhost:${PORT}/api/v1`);
+      console.log(`MCP available at: http://localhost:${PORT}/api/v1/mcp`);
     });
+
+    // Initialize MCP server
+    initializeMcpServer(app, server);
   } catch (error) {
     console.error('Error starting server:', error);
     process.exit(1);

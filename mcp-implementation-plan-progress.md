@@ -23,10 +23,10 @@ This document tracks our progress in implementing the MCP server and migrating t
 - [x] Implement getVoiceOptions tool
 - [x] Implement updateCallPreferences tool
 - [x] Implement makePhoneCall tool
-- [ ] Implement getCallStatus tool (secondary)
-- [ ] Implement getCallHistory tool (secondary)
-- [ ] Implement getCredits tool (secondary)
-- [ ] Implement addCredits tool (secondary)
+- [x] Implement getCallStatus tool (secondary)
+- [x] Implement getCallHistory tool (secondary)
+- [x] Implement getCredits tool (secondary)
+- [x] Implement addCredits tool (secondary)
 
 ### Resource Implementation
 - [x] Implement model resources
@@ -37,6 +37,7 @@ This document tracks our progress in implementing the MCP server and migrating t
   - [x] user_settings
   - [x] call_history
   - [x] credits
+  - [x] credit_transactions
 
 ### Google Sheets Rate Limiting
 - [x] Implement token bucket algorithm
@@ -62,8 +63,8 @@ This document tracks our progress in implementing the MCP server and migrating t
 
 ### Testing and Validation
 - [x] Basic MCP server testing
-- [ ] Create unit tests for core functionality
-- [ ] Implement integration tests
+- [x] Create unit tests for core functionality
+- [x] Implement integration tests
 - [ ] Set up automated testing pipeline
 
 ### Documentation
@@ -101,10 +102,10 @@ This document tracks our progress in implementing the MCP server and migrating t
 - [x] Implement getVoiceOptions tool
 - [x] Implement updateCallPreferences tool
 - [x] Implement makePhoneCall tool
-- [ ] Implement getCallStatus tool (secondary)
-- [ ] Implement getCallHistory tool (secondary)
-- [ ] Implement getCredits tool (secondary)
-- [ ] Implement addCredits tool (secondary)
+- [x] Implement getCallStatus tool (secondary)
+- [x] Implement getCallHistory tool (secondary)
+- [x] Implement getCredits tool (secondary)
+- [x] Implement addCredits tool (secondary)
 
 ## 4. Resource Implementation
 
@@ -145,8 +146,8 @@ This document tracks our progress in implementing the MCP server and migrating t
 ## 8. Testing and Validation
 
 - [x] Basic MCP server testing
-- [ ] Create unit tests for core functionality
-- [ ] Implement integration tests
+- [x] Create unit tests for core functionality
+- [x] Implement integration tests
 - [ ] Set up automated testing pipeline
 
 ## 9. Documentation

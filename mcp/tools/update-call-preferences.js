@@ -4,7 +4,7 @@
  * This tool updates a user's default preferences for phone calls.
  */
 
-const { JSONSchemaValidator } = require('jsonschema');
+const { JSONSchemaValidator } = require('../lib/validators');
 const { logger } = require('../../utils/logger');
 const { supabase } = require('../../config/supabase');
 const { redisClient } = require('../../config/redis');

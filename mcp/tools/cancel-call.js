@@ -4,7 +4,7 @@
  * This tool cancels an ongoing phone call through the Bland.AI API.
  */
 
-const { JSONSchemaValidator } = require('jsonschema');
+const { JSONSchemaValidator } = require('../lib/validators');
 const { logger } = require('../../utils/logger');
 const { supabase } = require('../../config/supabase');
 const axios = require('axios');

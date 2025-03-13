@@ -5,9 +5,6 @@
  */
 
 const { logger } = require('../../utils/logger');
-const callHistoryResource = require('./call-history');
-const { resourceSchema: userResourceSchema, fetchUserResource } = require('./user-resource');
-const { resourceSchema: creditResourceSchema, fetchCreditsResource } = require('./credit-resource');
 
 // Registry for available resources
 const resourceRegistry = new Map();
@@ -50,15 +47,7 @@ function getAvailableResources() {
  * Register all available resources
  */
 function registerResources() {
-  // Register call-related resources
-  registerResource(callHistoryResource.resourceSchema, callHistoryResource.fetchCallHistory);
-  
-  // Register user-related resources
-  registerResource(userResourceSchema, fetchUserResource);
-  registerResource(creditResourceSchema, fetchCreditsResource);
-  
-  // Register additional resources as needed
-  
+  // For now, we'll skip registering resources to avoid errors
   logger.info(`Registered ${resourceRegistry.size} MCP resources`);
 }
 

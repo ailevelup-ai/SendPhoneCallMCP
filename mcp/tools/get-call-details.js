@@ -4,7 +4,7 @@
  * This tool retrieves detailed information about a specific call made through Bland.AI.
  */
 
-const { JSONSchemaValidator } = require('jsonschema');
+const { JSONSchemaValidator } = require('../lib/validators');
 const { logger } = require('../../utils/logger');
 const { supabase } = require('../../config/supabase');
 const axios = require('axios');

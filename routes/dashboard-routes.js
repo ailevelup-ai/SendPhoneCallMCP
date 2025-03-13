@@ -3,7 +3,14 @@ const router = express.Router();
 const dashboardController = require('../controllers/dashboard-controller');
 const { authenticate } = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/admin');
-const { rateLimiter } = require('../middleware/rate-limiter');
+const { createRateLimiter } = require('../middleware/rate-limiter');
+
+// Create rate limiters for different routes
+const userDashboardLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 20 }); // 20 requests per minute
+const metricsLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 }); // 10 requests per minute
+const reportsLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 5 }); // 5 requests per minute
+const scheduleReportLimiter = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 5 }); // 5 requests per 5 minutes
+const scheduledReportsLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 }); // 10 requests per minute
 
 // Middleware for all dashboard routes
 router.use(authenticate);
@@ -11,7 +18,7 @@ router.use(authenticate);
 // User dashboard - available to all authenticated users
 router.get(
   '/user',
-  rateLimiter({ windowMs: 60 * 1000, max: 20 }), // 20 requests per minute
+  userDashboardLimiter,
   dashboardController.getUserDashboard
 );
 
@@ -19,7 +26,7 @@ router.get(
 router.get(
   '/metrics',
   requireAdmin,
-  rateLimiter({ windowMs: 60 * 1000, max: 10 }), // 10 requests per minute
+  metricsLimiter,
   dashboardController.getSystemMetrics
 );
 
@@ -27,21 +34,21 @@ router.get(
 router.get(
   '/reports/:reportType',
   requireAdmin, 
-  rateLimiter({ windowMs: 60 * 1000, max: 5 }), // 5 requests per minute
+  reportsLimiter,
   dashboardController.generateReport
 );
 
 // Schedule a report
 router.post(
   '/reports/schedule',
-  rateLimiter({ windowMs: 5 * 60 * 1000, max: 5 }), // 5 requests per 5 minutes
+  scheduleReportLimiter,
   dashboardController.scheduleReport
 );
 
 // Get scheduled reports
 router.get(
   '/reports/scheduled',
-  rateLimiter({ windowMs: 60 * 1000, max: 10 }), // 10 requests per minute
+  scheduledReportsLimiter,
   dashboardController.getScheduledReports
 );
 

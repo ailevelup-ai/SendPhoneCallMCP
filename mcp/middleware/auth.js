@@ -14,6 +14,19 @@ const { supabase } = require('../../config/supabase');
  * Validates the Bearer token and attaches user information to the request
  */
 async function authenticateMcp(req, res, next) {
+  // In development mode, allow testing without authentication
+  if (process.env.NODE_ENV === 'development' && process.env.BYPASS_MCP_AUTH === 'true') {
+    logger.warn('MCP authentication bypassed in development mode');
+    req.userId = 'dev-user-id';
+    req.user = {
+      id: 'dev-user-id',
+      email: 'dev@example.com',
+      role: 'admin',
+      api_key: 'dev-api-key'
+    };
+    return next();
+  }
+
   // Get Authorization header
   const authHeader = req.headers.authorization;
   
