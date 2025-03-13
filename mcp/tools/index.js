@@ -8,6 +8,8 @@ const { logger } = require('../../utils/logger');
 const makePhoneCallTool = require('./make-phone-call');
 const getCallDetailsTool = require('./get-call-details');
 const getCallHistoryTool = require('./get-call-history');
+const cancelCallTool = require('./cancel-call');
+const getCallProgressTool = require('./get-call-progress');
 
 // Registry for available tools
 const toolRegistry = new Map();
@@ -49,6 +51,8 @@ function registerTools() {
   registerTool(makePhoneCallTool);
   registerTool(getCallDetailsTool);
   registerTool(getCallHistoryTool);
+  registerTool(cancelCallTool);
+  registerTool(getCallProgressTool);
   
   // Register additional tools as needed
   

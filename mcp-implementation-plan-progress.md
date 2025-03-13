@@ -2,6 +2,108 @@
 
 This document tracks our progress in implementing the MCP server and migrating to AWS.
 
+## MCP Implementation Plan Progress
+
+### Project Setup and Environment Preparation
+- [x] Create a new Git branch for MCP implementation
+- [x] Install required dependencies
+- [x] Set up directory structure for MCP
+- [x] Configure environment variables for MCP
+- [x] Initialize basic MCP server structure
+
+### Core MCP Server Implementation
+- [x] Create MCP server module
+- [x] Implement message handling
+- [x] Set up routes and middleware
+- [x] Implement authentication middleware
+- [x] Create execution context management
+- [x] Set up error handling middleware
+- [x] Implement message parsing
+- [x] Implement function calling
+- [x] Implement response formatting
+- [x] Create MCP capability endpoint
+- [x] Add streaming support
+- [x] Implement rate limiting
+- [x] Set up logging
+- [x] Implement getCallDetails tool
+
+### Tool Implementation
+- [x] Define tool schemas
+- [x] Implement core phone call tools:
+   - [x] makePhoneCall
+   - [x] getCallDetails
+   - [x] getCallHistory
+   - [x] cancelCall
+- [x] Implement secondary tools:
+   - [x] getCallProgress (for tracking long-running operations)
+   - [ ] updateCallPreferences
+   - [ ] getVoiceOptions
+   - [ ] getModelOptions
+- [x] Implement progress reporting for long-running operations
+- [ ] Implement retry mechanisms and error handling
+- [ ] Add validation for tool parameters
+
+### Resource Implementation
+- [x] Define resource schemas
+- [x] Implement call history resources
+- [x] Implement user resources:
+   - [x] User profile
+   - [x] User preferences
+- [x] Implement credit resources:
+   - [x] Credit balance
+   - [x] Credit usage history
+
+### Google Sheets Rate Limiting
+- [x] Token bucket implementation
+- [x] Rate limit monitoring and logging
+- [x] Implement batch operations for efficiency
+- [ ] Circuit breaker pattern for API failure resilience
+- [ ] Rate limit parameter tuning based on API quotas
+
+### Lambda Polling Improvements
+- [x] Configure max concurrency to 1
+- [x] Add checkpoint mechanism
+- [x] Add timeout handling
+- [ ] Implement batched processing
+- [ ] Add health check endpoints
+- [ ] Configure dead-letter queue
+- [ ] Add CloudWatch alarms for monitoring
+
+### Migration to AWS
+- [x] Set up infrastructure with Terraform
+- [x] Configure environment-specific settings
+- [x] Define security groups and IAM roles
+- [ ] Configure CloudFront distribution
+- [ ] Set up S3 for static assets
+- [ ] Configure RDS or Aurora
+- [ ] Set up CloudWatch monitoring
+- [ ] Configure Lambda functions
+- [ ] Set up API Gateway
+- [ ] Configure auto-scaling
+- [ ] Set up CI/CD pipeline
+- [ ] Configure WAF for API protection
+
+### Testing and Validation
+- [ ] Create unit tests
+- [ ] Create integration tests
+- [ ] Load testing
+- [ ] Security testing
+- [ ] Monitoring and observability testing
+
+### Documentation
+- [x] Create API documentation
+- [x] Create operational documentation
+- [x] Update deployment instructions
+- [ ] Create API documentation endpoint
+- [x] Document rate limiting strategy
+
+### Launch and Post-Launch
+- [ ] Create staged rollout plan
+- [ ] Set up feedback mechanism
+- [ ] Define KPIs for monitoring
+- [ ] Plan for future enhancements
+- [ ] Define post-launch support process
+
 ## 1. Project Setup and Environment Preparation
 
 - [x] Create a new Git branch for MCP implementation
@@ -38,13 +140,14 @@ This document tracks our progress in implementing the MCP server and migrating t
 
 - [x] Implement core phone call tools
   - [x] `makePhoneCall`: Initiate a phone call
-  - [ ] `getCallDetails`: Get information about a specific call
+  - [x] `getCallDetails`: Get information about a specific call
   - [x] `getCallHistory`: List previous calls with filtering
 
-- [ ] Implement secondary tools
-  - [ ] `getCallTranscript`: Retrieve transcripts
-  - [ ] `getCallRecording`: Access call recordings
-  - [ ] `cancelCall`: Cancel an ongoing call
+- [x] Implement secondary tools
+  - [x] `getCallProgress`: Track progress of long-running operations
+  - [ ] `updateCallPreferences`: Update call preferences
+  - [ ] `getVoiceOptions`: Get available voice options
+  - [ ] `getModelOptions`: Get available model options
 
 - [x] Create tool execution handlers
   - [x] Connect each tool to existing service functions
@@ -62,10 +165,10 @@ This document tracks our progress in implementing the MCP server and migrating t
   - [x] Implement filtering and pagination
   - [x] Add proper access control
 
-- [ ] Implement user and credit resources
-  - [ ] Expose user profile information
-  - [ ] Create credit balance and usage resources
-  - [ ] Ensure proper data security
+- [x] Implement user and credit resources
+  - [x] Expose user profile information
+  - [x] Create credit balance and usage resources
+  - [x] Ensure proper data security
 
 - [x] Add resource handlers
   - [x] Connect resources to database queries

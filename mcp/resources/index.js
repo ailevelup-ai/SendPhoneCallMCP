@@ -6,26 +6,32 @@
 
 const { logger } = require('../../utils/logger');
 const callHistoryResource = require('./call-history');
-const userCreditsResource = require('./user-credits');
+const { resourceSchema: userResourceSchema, fetchUserResource } = require('./user-resource');
+const { resourceSchema: creditResourceSchema, fetchCreditsResource } = require('./credit-resource');
 
 // Registry for available resources
 const resourceRegistry = new Map();
 
 /**
- * Register a resource in the registry
- * @param {Object} resource Resource definition
+ * Register a resource schema in the registry
+ * @param {Object} resourceSchema Resource schema definition
+ * @param {Function} getFunction Function to fetch the resource data
  */
-function registerResource(resource) {
-  if (!resource || !resource.name) {
-    throw new Error('Invalid resource definition');
+function registerResource(resourceSchema, getFunction) {
+  if (!resourceSchema || !resourceSchema.name) {
+    throw new Error('Invalid resource schema definition');
   }
   
-  if (resourceRegistry.has(resource.name)) {
-    logger.warn(`Resource ${resource.name} already registered, overwriting`);
+  if (resourceRegistry.has(resourceSchema.name)) {
+    logger.warn(`Resource ${resourceSchema.name} already registered, overwriting`);
   }
   
-  resourceRegistry.set(resource.name, resource);
-  logger.info(`Registered MCP resource: ${resource.name}`);
+  resourceRegistry.set(resourceSchema.name, {
+    ...resourceSchema,
+    get: getFunction
+  });
+  
+  logger.info(`Registered MCP resource: ${resourceSchema.name}`);
 }
 
 /**
@@ -45,8 +51,11 @@ function getAvailableResources() {
  */
 function registerResources() {
   // Register call-related resources
-  registerResource(callHistoryResource);
-  registerResource(userCreditsResource);
+  registerResource(callHistoryResource.resourceSchema, callHistoryResource.fetchCallHistory);
+  
+  // Register user-related resources
+  registerResource(userResourceSchema, fetchUserResource);
+  registerResource(creditResourceSchema, fetchCreditsResource);
   
   // Register additional resources as needed
   
@@ -56,11 +65,12 @@ function registerResources() {
 /**
  * Get a resource by name
  * @param {Object} params Parameters containing name and filters
- * @param {string} sessionId Session identifier
+ * @param {Object} context Execution context including sessionId and user
  * @returns {Promise<Object>} Resource data
  */
-async function getResourceById(params, sessionId) {
+async function getResourceById(params, context) {
   const { name, filters } = params;
+  const { sessionId, userId } = context;
   
   if (!name) {
     throw new Error('Resource name is required');
@@ -73,7 +83,7 @@ async function getResourceById(params, sessionId) {
     throw new Error(`Resource not found: ${name}`);
   }
   
-  // Validate filters against schema
+  // Validate filters if a validation function exists
   if (resource.validateFilters) {
     const validationError = resource.validateFilters(filters);
     if (validationError) {
@@ -87,6 +97,7 @@ async function getResourceById(params, sessionId) {
   // Log resource access
   logger.info(`Accessing MCP resource: ${name}`, { 
     sessionId,
+    userId,
     resourceName: name,
     // Don't log sensitive filters
     hasFilters: !!filters
@@ -94,11 +105,12 @@ async function getResourceById(params, sessionId) {
   
   try {
     // Access resource with filters
-    const data = await resource.get(filters, { sessionId });
+    const data = await resource.get(userId, sessionId, filters);
     
     // Log success (without sensitive result data)
     logger.info(`Successfully accessed MCP resource: ${name}`, {
       sessionId,
+      userId,
       resourceName: name
     });
     
@@ -111,6 +123,7 @@ async function getResourceById(params, sessionId) {
     // Log error
     logger.error(`Error accessing MCP resource ${name}: ${error.message}`, {
       sessionId,
+      userId,
       resourceName: name,
       error
     });
