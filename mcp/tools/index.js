@@ -10,6 +10,9 @@ const getCallDetailsTool = require('./get-call-details');
 const getCallHistoryTool = require('./get-call-history');
 const cancelCallTool = require('./cancel-call');
 const getCallProgressTool = require('./get-call-progress');
+const updateCallPreferencesTool = require('./update-call-preferences');
+const getVoiceOptionsTool = require('./get-voice-options');
+const getModelOptionsTool = require('./get-model-options');
 
 // Registry for available tools
 const toolRegistry = new Map();
@@ -47,12 +50,19 @@ function getAvailableTools() {
  * Register all available tools
  */
 function registerTools() {
-  // Register phone call tools
+  // Register core phone call tools
   registerTool(makePhoneCallTool);
   registerTool(getCallDetailsTool);
   registerTool(getCallHistoryTool);
   registerTool(cancelCallTool);
+  
+  // Register progress reporting tool
   registerTool(getCallProgressTool);
+  
+  // Register configuration tools
+  registerTool(updateCallPreferencesTool);
+  registerTool(getVoiceOptionsTool);
+  registerTool(getModelOptionsTool);
   
   // Register additional tools as needed
   

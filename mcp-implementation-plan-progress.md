@@ -36,12 +36,12 @@ This document tracks our progress in implementing the MCP server and migrating t
    - [x] cancelCall
 - [x] Implement secondary tools:
    - [x] getCallProgress (for tracking long-running operations)
-   - [ ] updateCallPreferences
-   - [ ] getVoiceOptions
-   - [ ] getModelOptions
+   - [x] updateCallPreferences
+   - [x] getVoiceOptions
+   - [x] getModelOptions
 - [x] Implement progress reporting for long-running operations
-- [ ] Implement retry mechanisms and error handling
-- [ ] Add validation for tool parameters
+- [x] Implement retry mechanisms and error handling
+- [x] Add validation for tool parameters
 
 ### Resource Implementation
 - [x] Define resource schemas
@@ -145,14 +145,14 @@ This document tracks our progress in implementing the MCP server and migrating t
 
 - [x] Implement secondary tools
   - [x] `getCallProgress`: Track progress of long-running operations
-  - [ ] `updateCallPreferences`: Update call preferences
-  - [ ] `getVoiceOptions`: Get available voice options
-  - [ ] `getModelOptions`: Get available model options
+  - [x] `updateCallPreferences`: Update call preferences
+  - [x] `getVoiceOptions`: Get available voice options
+  - [x] `getModelOptions`: Get available model options
 
 - [x] Create tool execution handlers
   - [x] Connect each tool to existing service functions
   - [x] Add proper error handling and validation
-  - [ ] Implement progress reporting for long-running operations
+  - [x] Implement progress reporting for long-running operations
 
 ## 4. Resource Implementation
 
