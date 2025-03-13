@@ -1,178 +1,112 @@
-# Bland.AI MCP - Management Control Panel
+# SendPhoneCall MCP Server
 
-A comprehensive management control panel for the Bland.AI phone call service. This application allows users to make automated AI phone calls, track call history, and manage credits.
-
-## Features
-
-- **User Authentication**: Create accounts, login, and manage API keys
-- **Credits System**: View and top up your credits
-- **Call History**: View detailed call history with filtering and sorting
-- **Call Details**: See detailed information about each call, including transcripts and recordings
-- **Polling System**: Automatic updates from Bland.AI to keep call data current
-- **Google Sheets Integration**: Log all calls to Google Sheets for easy export and analysis
-- **Supabase Integration**: Secure database storage with PostgreSQL
-- **Modern UI**: Clean, responsive front-end built with React
-
-## Tech Stack
-
-- **Backend**: Node.js with Express
-- **Frontend**: React with React Router
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Custom auth with Supabase
-- **Logging**: Google Sheets API
-- **Storage**: Supabase Storage
-- **Hosting**: Any platform that supports Node.js
+This repository contains the MCP (Model Control Protocol) server implementation for the SendPhoneCall service, which enables AI-powered phone calls.
 
 ## Prerequisites
 
-- Node.js 14+ and npm
+- Node.js (v14 or higher)
 - Supabase account and project
-- Google Cloud Platform account with Google Sheets API enabled
-- Bland.AI API key
+- Environment variables set up (see below)
 
-## Installation
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/ailevelup-ai/SendPhoneCallMCP.git
-cd SendPhoneCallMCP
-```
-
-### 2. Install dependencies
-
-```bash
-# Install server dependencies
-npm install
-
-# Install client dependencies
-cd client
-npm install
-cd ..
-```
-
-### 3. Set up environment variables
+## Environment Variables
 
 Create a `.env` file in the root directory with the following variables:
 
 ```
-# Server configuration
 PORT=3040
 NODE_ENV=development
-
-# Bland.AI API
-BLAND_ENTERPRISE_API_KEY=your_bland_api_key
-BLAND_ENCRYPTED_KEY=your_bland_encrypted_key
-BLAND_DEFAULT_VOICE=nat
-BLAND_DEFAULT_FROM_NUMBER=+15615665857
-BLAND_DEFAULT_MODEL=turbo
-BLAND_DEFAULT_TEMPERATURE=1
-BLAND_DEFAULT_VOICEMAIL_ACTION=hangup
-BLAND_ANSWERED_BY_ENABLED=true
-
-# Supabase
 SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_KEY=your_supabase_service_key
-SUPABASE_ANON_KEY=your_supabase_anon_key
-
-# Google Sheets
-GOOGLE_SHEETS_DOC_ID=your_google_sheets_doc_id
-GOOGLE_SHEETS_CLIENT_EMAIL=your_google_service_account_email
-GOOGLE_SHEETS_PRIVATE_KEY="your_google_service_account_private_key"
+SUPABASE_KEY=your_supabase_service_key
+BYPASS_MCP_AUTH=true  # Only for development
 ```
 
-Create a `.env` file in the client directory:
+## Database Setup
 
-```
-REACT_APP_SUPABASE_URL=your_supabase_url
-REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-### 4. Set up Supabase database
-
-Run the schema creation script:
+1. Create a Supabase project if you haven't already
+2. Execute the SQL in `supabase-setup.sql` in the Supabase SQL Editor to create the necessary functions
+3. Run the database setup script:
 
 ```bash
-node scripts/update-schema.js
+node setup-database.js
 ```
 
-### 5. Initialize Google Sheets
+This will create the following tables:
+- `user_settings`: Stores user preferences for phone calls
+- `call_history`: Records history of phone calls made
+- `credits`: Manages user credit balance for making calls
 
-The application will automatically create and initialize the Google Sheets document on first run.
-
-## Running the Application
-
-### Development Mode
+## Starting the Server
 
 ```bash
-# Start the server
-npm start
-
-# In a separate terminal, start the client
-cd client
-npm start
+node server.js
 ```
 
-The server will run on port 3040 and the client on port 3000.
-
-### Production Mode
+For development with authentication bypass:
 
 ```bash
-# Build the client
-cd client
-npm run build
-cd ..
-
-# Start the production server
-NODE_ENV=production npm start
+NODE_ENV=development BYPASS_MCP_AUTH=true node server.js
 ```
-
-In production mode, the server will serve the React build files.
 
 ## API Endpoints
 
-### Authentication
+### Health Check
+```
+GET /health
+```
 
-- `POST /api/v1/auth/register` - Register a new user
-- `POST /api/v1/auth/login` - Login
-- `POST /api/v1/auth/logout` - Logout
-- `POST /api/v1/auth/reset-api-key` - Reset API key
+### MCP API
+```
+POST /api/v1/mcp
+```
 
-### Calls
+## Available Tools
 
-- `POST /api/v1/call` - Make a new call
-- `GET /api/v1/call/:callId` - Get call details
-- `GET /api/v1/calls` - Get call history
+The MCP server provides the following tools:
 
-### Credits
+### getModelOptions
+Returns available AI model options for phone calls.
 
-- `POST /api/v1/credits/add` - Add credits
-- `GET /api/v1/credits/balance` - Get credit balance
+### getVoiceOptions
+Returns available voice options for phone calls.
 
-## Polling System
+### updateCallPreferences
+Updates a user's default preferences for phone calls.
 
-The application includes two polling systems to keep call data updated:
+Parameters:
+- `defaultVoice`: Default voice to use (string)
+- `defaultModel`: Default AI model to use (string)
+- `defaultTemperature`: Default temperature setting (0.0-1.0)
+- `defaultFromNumber`: Default phone number to make calls from (E.164 format)
+- `defaultVoicemailAction`: Action to take when voicemail is detected (leave_message, hang_up, retry_later)
 
-1. **Local Polling**: A script that runs every 5 minutes to update call data
-   ```bash
-   node poll-call-updates.js
-   ```
+### makePhoneCall
+Initiates a phone call.
 
-2. **AWS Lambda Function**: A function that can be deployed to AWS Lambda to poll for updates
-   ```bash
-   # Deploy to AWS Lambda (requires AWS CLI configured)
-   zip -r lambda-function.zip lambda-call-updater.js node_modules
-   aws lambda create-function --function-name bland-ai-call-updater --zip-file fileb://lambda-function.zip --handler lambda-call-updater.handler --runtime nodejs14.x --role your-lambda-execution-role-arn
-   ```
+Parameters:
+- `toNumber`: Phone number to call (E.164 format)
+- `fromNumber`: Phone number to call from (E.164 format)
+- `voiceId`: Voice to use
+- `modelId`: AI model to use
+- `temperature`: Temperature setting (0.0-1.0)
+- `instructions`: Instructions for the AI
 
-## License
+## Testing the API
 
-[MIT](LICENSE)
+Initialize a session:
+```bash
+curl -X POST http://localhost:3040/api/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"clientName":"test-client","clientVersion":"1.0.0"},"id":1}'
+```
 
-## Contributing
+Execute a tool (example: getModelOptions):
+```bash
+curl -X POST http://localhost:3040/api/v1/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer SESSION_ID" \
+  -d '{"jsonrpc":"2.0","method":"tools/execute","params":{"name":"getModelOptions","arguments":{}},"id":2}'
+```
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request 
+## Implementation Plan Progress
+
+See `mcp-implementation-plan-progress.md` for the current status of the implementation plan. 
