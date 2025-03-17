@@ -40,7 +40,7 @@ async function fetchVoiceMappings() {
     if (defaultVoice) {
       VOICE_IDS.default = defaultVoice.voice_id;
     } else {
-      VOICE_IDS.default = '11labs-michael'; // Fallback default
+      VOICE_IDS.default = null; // Don't use hardcoded fallback
     }
     
     // Populate the VOICE_IDS mapping
@@ -67,9 +67,41 @@ const setupGoogleAuth = async () => {
     console.log('GOOGLE_AUDIENCE:', process.env.GOOGLE_AUDIENCE || 'not set');
     console.log('GOOGLE_PROJECT_ID:', process.env.GOOGLE_PROJECT_ID || 'not set');
     console.log('GOOGLE_WORKLOAD_POOL_ID:', process.env.GOOGLE_WORKLOAD_POOL_ID || 'not set');
+    console.log('GOOGLE_SHEETS_PRIVATE_KEY length:', process.env.GOOGLE_SHEETS_PRIVATE_KEY ? process.env.GOOGLE_SHEETS_PRIVATE_KEY.length : 'not set');
+    console.log('GOOGLE_SHEETS_CLIENT_EMAIL:', process.env.GOOGLE_SHEETS_CLIENT_EMAIL || 'not set');
+    console.log('GOOGLE_SHEETS_DOC_ID:', process.env.GOOGLE_SHEETS_DOC_ID || 'not set');
     
-    // Check if using workload identity federation (recommended approach)
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_AUDIENCE) {
+    // Check if JWT authentication is possible with the private key
+    if (process.env.GOOGLE_SHEETS_PRIVATE_KEY && process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
+      console.log('Using JWT authentication with client email:', 
+        process.env.GOOGLE_SHEETS_CLIENT_EMAIL);
+      
+      // Fix any potential issues with the private key formatting
+      const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, '\n');
+      console.log('Private key properly formatted');
+      
+      // Create JWT client for authentication
+      try {
+        const jwtClient = new google.auth.JWT(
+          process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+          null,
+          privateKey,
+          ['https://www.googleapis.com/auth/spreadsheets']
+        );
+        
+        console.log('JWT client created, attempting to authorize...');
+        await jwtClient.authorize();
+        console.log('Successfully authorized JWT client');
+        return jwtClient;
+      } catch (authError) {
+        console.error('Failed to authorize JWT client:', authError);
+        console.error('Error details:', JSON.stringify(authError, null, 2));
+        // Try with a different approach if JWT fails
+        throw new Error(`JWT authentication failed: ${authError.message}`);
+      }
+    }
+    // Fall back to workload identity if JWT fails or is not available
+    else if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_AUDIENCE) {
       console.log('Using workload identity federation with service account:', 
         process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
       
@@ -92,33 +124,12 @@ const setupGoogleAuth = async () => {
         console.error('Failed to create auth client:', clientError);
         throw new Error(`Workload identity federation auth failed: ${clientError.message}`);
       }
-    } 
-    // Fall back to JWT authentication if private key is available
-    else if (process.env.GOOGLE_SHEETS_PRIVATE_KEY && process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
-      console.log('Using JWT authentication with client email:', 
-        process.env.GOOGLE_SHEETS_CLIENT_EMAIL);
-      
-      // Create JWT client for authentication
-      const jwtClient = new google.auth.JWT(
-        process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
-        null,
-        process.env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        ['https://www.googleapis.com/auth/spreadsheets']
-      );
-      
-      try {
-        await jwtClient.authorize();
-        console.log('Successfully authorized JWT client');
-        return jwtClient;
-      } catch (authError) {
-        console.error('Failed to authorize JWT client:', authError);
-        throw new Error(`JWT authentication failed: ${authError.message}`);
-      }
     } else {
       const missingVars = [];
+      if (!process.env.GOOGLE_SHEETS_PRIVATE_KEY) missingVars.push('GOOGLE_SHEETS_PRIVATE_KEY');
+      if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) missingVars.push('GOOGLE_SHEETS_CLIENT_EMAIL');
       if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) missingVars.push('GOOGLE_SERVICE_ACCOUNT_EMAIL');
       if (!process.env.GOOGLE_AUDIENCE) missingVars.push('GOOGLE_AUDIENCE');
-      if (!process.env.GOOGLE_PROJECT_ID) missingVars.push('GOOGLE_PROJECT_ID');
       
       const errorMsg = `Missing required Google auth variables: ${missingVars.join(', ')}`;
       console.error(errorMsg);
@@ -160,13 +171,7 @@ const logCallToGoogleSheets = async (data) => {
   try {
     console.log('Logging call to Google Sheets, data:', JSON.stringify(data));
     
-    const auth = await setupGoogleAuth();
-    if (!auth) {
-      console.error('Failed to set up Google Auth');
-      return false;
-    }
-    
-    // Get document ID from environment variables
+    // First check if spreadsheet ID is set
     const spreadsheetId = process.env.GOOGLE_SHEETS_DOC_ID;
     if (!spreadsheetId) {
       console.error('No spreadsheet ID found in environment variables');
@@ -175,35 +180,138 @@ const logCallToGoogleSheets = async (data) => {
     
     console.log('Using spreadsheet ID:', spreadsheetId);
     
-    // Format data for Google Sheets
+    // Then set up authentication
+    console.log('Setting up Google Auth for sheets logging...');
+    const auth = await setupGoogleAuth();
+    if (!auth) {
+      console.error('Failed to set up Google Auth, cannot log to sheets');
+      return false;
+    }
+    console.log('Successfully set up Google Auth');
+    
+    // Format data for Google Sheets - match the column order from the spreadsheet
     const values = [
       [
-        new Date().toISOString(),
+        new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
+        'N/A', // API Key
         data.user_id || 'N/A',
         data.call_id || 'N/A',
         data.phone_number || 'N/A',
+        '0', // Call Duration starts at 0
         data.status || 'initiated',
+        data.credits_used || '1',
+        data.webhook_url || 'N/A',
+        data.voice_name || data.voice || process.env.DEFAULT_VOICE || 'N/A', // Use voice_name if available
         data.task ? (data.task.length > 500 ? data.task.substring(0, 500) + '...' : data.task) : '',
-        data.voice || process.env.DEFAULT_VOICE || 'N/A',
-        data.from_number || process.env.DEFAULT_FROM_NUMBER || 'N/A',
-        data.model || process.env.DEFAULT_MODEL || 'N/A',
-        data.temperature || process.env.DEFAULT_TEMPERATURE || '1',
-        data.voicemail_action || process.env.DEFAULT_VOICEMAIL_ACTION || 'hangup',
-        data.answered_by_enabled ? 'true' : 'false',
-        data.max_duration || '0',
-        data.credits_used || '1'
+        'N/A', // Moderation Status
+        data.from || process.env.DEFAULT_FROM_NUMBER || 'N/A',
+        '0', // Billed Amount
+        data.error_message || '', // Error Messages
+        '', // Call Summary
+        '', // Recording URL
+        '', // Request Parameters
+        '', // Response Parameters
+        '', // Concatenated Transcript
+        '', // Transfer Number
+        data.answered_by_enabled ? 'true' : 'false', // Answered By
+        '', // Call Ended By
+        '', // Analysis Score/Analysis
+        'Pending', // Computed Durs Update Status
+        new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }) // Last Updated
       ]
     ];
     
-    console.log('Appending values to spreadsheet:', values);
+    console.log('Appending values to spreadsheet:', JSON.stringify(values));
     
     // Use try/catch specifically for the sheets API call
     try {
+      console.log('Creating sheets client...');
+      const sheetsClient = sheets.spreadsheets.values;
+      console.log('Sheets client created');
+      
+      // First test if we can access the spreadsheet
+      try {
+        console.log('Testing if spreadsheet is accessible...');
+        
+        // First, check if the spreadsheet itself exists and is accessible
+        try {
+          const spreadsheetResponse = await sheets.spreadsheets.get({
+            auth,
+            spreadsheetId
+          });
+          console.log('Spreadsheet is accessible');
+          
+          // Check if "Call_Logs" sheet exists
+          const sheetsInSpreadsheet = spreadsheetResponse.data.sheets.map(sheet => sheet.properties.title);
+          console.log('Sheets in spreadsheet:', sheetsInSpreadsheet);
+          
+          if (!sheetsInSpreadsheet.includes('Call_Logs')) {
+            console.log('Call_Logs sheet does not exist, creating it...');
+            // Create the Call_Logs sheet
+            await sheets.spreadsheets.batchUpdate({
+              auth,
+              spreadsheetId,
+              resource: {
+                requests: [
+                  {
+                    addSheet: {
+                      properties: {
+                        title: 'Call_Logs'
+                      }
+                    }
+                  }
+                ]
+              }
+            });
+            console.log('Call_Logs sheet created successfully');
+            
+            // Add headers to the sheet
+            await sheetsClient.update({
+              auth,
+              spreadsheetId,
+              range: 'Call_Logs!A1:Z1',
+              valueInputOption: 'RAW',
+              resource: {
+                values: [['Timestamp', 'API Key (use #)', 'User ID', 'Call ID', 'Phone Number', 'Call Duration (mins)', 'Call Status', 'Credits Used', 'Webhook URL', 'Voice Used', 'Task/Prompt', 'Moderation Status', 'From Number', 'Billed Amount', 'Error Messages', 'Call Summary', 'Recording URL', 'Request Parameters', 'Response Parameters', 'Concatenated Transcript', 'Transfer Number', 'Answered By', 'Call Ended By', 'Analysis Score/Analysis', 'Computed Durs Update Status', 'Last Updated']]
+              }
+            });
+            console.log('Headers added to Call_Logs sheet');
+          }
+        } catch (spreadsheetError) {
+          console.error('Error checking/creating spreadsheet:', spreadsheetError);
+          if (spreadsheetError.code === 403) {
+            console.error('Permission denied. Verify that the service account has access to the spreadsheet.');
+          } else if (spreadsheetError.code === 404) {
+            console.error('Spreadsheet not found. Verify the spreadsheet ID is correct.');
+          }
+          throw spreadsheetError;
+        }
+        
+        // Try to access the Call_Logs sheet
+        const testResponse = await sheetsClient.get({
+          auth,
+          spreadsheetId,
+          range: 'Call_Logs!A1:Z1'
+        });
+        console.log('Call_Logs sheet is accessible:', JSON.stringify(testResponse.data));
+      } catch (testError) {
+        console.error('Error accessing spreadsheet:', testError);
+        if (testError.code === 403) {
+          console.error('Permission denied. Verify that the service account has access to the spreadsheet.');
+        } else if (testError.code === 404) {
+          console.error('Spreadsheet not found. Verify the spreadsheet ID is correct.');
+        } else {
+          console.error(`Other error (${testError.code}): ${testError.message}`);
+        }
+        return false;
+      }
+      
       // Update Google Sheet
-      const response = await sheets.spreadsheets.values.append({
+      console.log('Appending data to spreadsheet...');
+      const response = await sheetsClient.append({
         auth,
         spreadsheetId,
-        range: 'Calls!A:N',
+        range: 'Call_Logs!A:Z',
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: {
@@ -215,12 +323,20 @@ const logCallToGoogleSheets = async (data) => {
       return true;
     } catch (sheetsError) {
       console.error('Google Sheets API error:', sheetsError);
+      console.error('Error stack:', sheetsError.stack);
+      
       // Check if it's a permission issue
       if (sheetsError.code === 403) {
         console.error('Permission denied. Verify that the service account has access to the spreadsheet.');
       } else if (sheetsError.code === 404) {
         console.error('Spreadsheet not found. Verify the spreadsheet ID is correct.');
       }
+      
+      // Log detailed error information
+      if (sheetsError.response) {
+        console.error('Error response:', JSON.stringify(sheetsError.response.data));
+      }
+      
       console.error('Error details:', sheetsError.errors || sheetsError.message);
       return false;
     }
@@ -250,11 +366,32 @@ const _makeCallHandler = async (event, context) => {
   try {
     console.log('Received event:', JSON.stringify(event));
     
+    // Check for required environment variables
+    if (!process.env.AILEVELUP_ENTERPRISE_API_KEY) {
+      console.error('Missing required environment variable: AILEVELUP_ENTERPRISE_API_KEY');
+    }
+    
+    if (!process.env.AILEVELUP_ENCRYPTED_KEY) {
+      console.error('Missing required environment variable: AILEVELUP_ENCRYPTED_KEY');
+    }
+    
+    if (!process.env.AILEVELUP_API_URL) {
+      console.error('Missing required environment variable: AILEVELUP_API_URL');
+    }
+    
     // Wait for voice mappings to be loaded
     await fetchVoiceMappings();
     
     const body = JSON.parse(event.body);
-    const userId = event.requestContext.authorizer.claims.sub;
+    
+    // Check if authorizer exists, otherwise use a default user ID
+    let userId;
+    if (event.requestContext && event.requestContext.authorizer && event.requestContext.authorizer.claims) {
+      userId = event.requestContext.authorizer.claims.sub;
+    } else {
+      userId = 'test-user-id'; // Default user ID for direct invocations
+      console.log('No authorizer found, using default test user ID');
+    }
     
     console.log('User ID:', userId);
     console.log('Request body:', JSON.stringify(body));
@@ -274,15 +411,19 @@ const _makeCallHandler = async (event, context) => {
       voice = process.env.DEFAULT_VOICE,
       webhook_url,
       from_number,
-      model = process.env.DEFAULT_MODEL,
+      model: requestModel, // Rename to requestModel to preserve the original value but not use it
       temperature = parseFloat(process.env.DEFAULT_TEMPERATURE) || 1,
       voicemail_action = process.env.DEFAULT_VOICEMAIL_ACTION || 'hangup',
       answered_by_enabled = process.env.ANSWERED_BY_ENABLED === 'true',
       max_duration
     } = body;
 
+    // Always use "turbo" model
+    const model = "turbo";
+
     // Handle voice ID mapping
     let voiceId;
+    let voiceName = voice || 'default'; // Store the original voice name
     
     if (voice) {
       // Convert to lowercase for case-insensitive matching
@@ -298,18 +439,20 @@ const _makeCallHandler = async (event, context) => {
         console.log(`Using provided voice ID: ${voiceId}`);
       } else {
         // Use default voice if name not found
-        voiceId = VOICE_IDS.default || '11labs-michael';
+        voiceId = VOICE_IDS.default;
+        voiceName = 'default'; // Reset voice name to default
         console.log(`Voice name "${voice}" not found, using default: ${voiceId}`);
       }
     } else {
       // No voice specified, use default
-      voiceId = VOICE_IDS.default || '11labs-michael';
+      voiceId = VOICE_IDS.default;
+      voiceName = 'default'; // Set voice name to default
       console.log(`No voice specified, using default: ${voiceId}`);
     }
 
     // Ensure from_number is explicitly set 
-    const callFromNumber = from_number || process.env.DEFAULT_FROM_NUMBER;
-    console.log('Using from_number:', callFromNumber);
+    const fromNumber = from_number || process.env.DEFAULT_FROM_NUMBER;
+    console.log('Using from number:', fromNumber);
     console.log('Encrypted key:', process.env.AILEVELUP_ENCRYPTED_KEY);
 
     // Validate required fields
@@ -366,13 +509,14 @@ const _makeCallHandler = async (event, context) => {
       phone_number,
       task,
       voice_id: voiceId,
-      from_number: callFromNumber,
+      from: fromNumber,
       webhook_url,
-      model,
+      model: "turbo",
       temperature,
       voicemail_action,
       answered_by_enabled,
-      max_duration: max_duration || userCredits.balance
+      max_duration: max_duration || userCredits.balance,
+      local_dialing: false
     };
     
     console.log('API Payload:', JSON.stringify(apiPayload));
@@ -384,16 +528,23 @@ const _makeCallHandler = async (event, context) => {
     // Set up headers for API request
     const headers = {
       'Content-Type': 'application/json',
-      'authorization': process.env.AILEVELUP_ENTERPRISE_API_KEY
+      'authorization': process.env.AILEVELUP_ENTERPRISE_API_KEY,
+      'encrypted-key': process.env.AILEVELUP_ENCRYPTED_KEY
     };
     
-    console.log('Using headers: ', JSON.stringify(headers, null, 2));
+    console.log('API headers:', JSON.stringify({
+      'Content-Type': 'application/json',
+      'authorization': process.env.AILEVELUP_ENTERPRISE_API_KEY ? 'Set (value hidden)' : 'Not set',
+      'encrypted-key': process.env.AILEVELUP_ENCRYPTED_KEY ? 'Set (value hidden)' : 'Not set'
+    }));
     
     // Define callData variable in the outer scope
     let callData;
     
     // Use axios instead of fetch
     try {
+      console.log('Making API call with payload:', JSON.stringify(apiPayload));
+      
       const response = await axios({
         method: 'post',
         url: `${API_URL}/v1/calls`,
@@ -402,9 +553,12 @@ const _makeCallHandler = async (event, context) => {
       });
 
       callData = response.data;
-      console.log('API Response:', JSON.stringify(callData));
+      console.log('API Response status:', response.status);
+      console.log('API Response headers:', JSON.stringify(response.headers));
+      console.log('API Response data:', JSON.stringify(callData));
 
       if (response.status < 200 || response.status >= 300) {
+        console.error('API call returned non-success status code:', response.status);
         return createResponse(response.status, {
           error: 'Failed to make call',
           details: callData
@@ -412,10 +566,32 @@ const _makeCallHandler = async (event, context) => {
       }
     } catch (apiError) {
       console.error('API call error:', apiError.message);
+      console.error('API call error stack:', apiError.stack);
       if (apiError.response) {
         console.error('API response status:', apiError.response.status);
+        console.error('API response headers:', JSON.stringify(apiError.response.headers));
         console.error('API response data:', JSON.stringify(apiError.response.data));
+      } else if (apiError.request) {
+        console.error('API request was made but no response received:', apiError.request);
+      } else {
+        console.error('API error setup details:', apiError.message);
       }
+      
+      // Add error info to Google Sheets log
+      await logCallToGoogleSheets({
+        user_id: userId,
+        call_id: 'error',
+        phone_number,
+        status: 'error',
+        task,
+        voice: voiceId,
+        voice_name: voiceName,
+        from: fromNumber,
+        credits_used: 0,
+        webhook_url,
+        error_message: apiError.message
+      });
+      
       return createResponse(500, {
         error: 'API call failed',
         message: apiError.message,
@@ -434,9 +610,9 @@ const _makeCallHandler = async (event, context) => {
           phone_number,
           status: 'initiated',
           task,
-          voice: voiceId, // Save the voice ID, not the name
-          from_number: callFromNumber,
-          model,
+          voice: voiceId,
+          from: fromNumber,
+          model: "turbo",
           temperature,
           voicemail_action,
           answered_by_enabled,
@@ -470,9 +646,10 @@ const _makeCallHandler = async (event, context) => {
       phone_number,
       status: 'initiated',
       task,
-      voice: voiceId, // Log the voice ID
-      from_number: callFromNumber,
-      model,
+      voice: voiceId,
+      voice_name: voiceName,
+      from: fromNumber,
+      model: "turbo",
       temperature,
       voicemail_action,
       answered_by_enabled,

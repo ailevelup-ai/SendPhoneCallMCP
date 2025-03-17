@@ -1,0 +1,63 @@
+{
+    "FunctionName": "ailevelup-phone-call-mcp-staging-make-call",
+    "FunctionArn": "arn:aws:lambda:us-east-1:688567265234:function:ailevelup-phone-call-mcp-staging-make-call",
+    "Runtime": "nodejs22.x",
+    "Role": "arn:aws:iam::688567265234:role/lambda-basic-execution",
+    "Handler": "index.handler",
+    "CodeSize": 15652773,
+    "Description": "",
+    "Timeout": 30,
+    "MemorySize": 256,
+    "LastModified": "2025-03-16T02:26:45.000+0000",
+    "CodeSha256": "NPF7jFpXgqJ66lQ5lO61lT32mLGA9pSuJE84SDHSefI=",
+    "Version": "$LATEST",
+    "Environment": {
+        "Variables": {
+            "DEFAULT_VOICEMAIL_ACTION": "hangup",
+            "AILEVELUP_ENCRYPTED_KEY": "c673a7be-c8d6-4228-bd29-c2fb85770ef7",
+            "TEST_USER_ID": "test-user-123",
+            "AILEVELUP_API_URL": "https://api.bland.ai",
+            "DEFAULT_VOICE": "4a5c3c9b-19bc-4ae7-9d58-a96950e97ef5",
+            "SUPABASE_URL": "https://rfreswizypwaryzyqczr.supabase.co",
+            "DEFAULT_FROM_NUMBER": "+15615665857",
+            "DEFAULT_MODEL": "turbo",
+            "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmcmVzd2l6eXB3YXJ5enlxY3pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE4MDYzOTEsImV4cCI6MjA1NzM4MjM5MX0.7JHj1nSPWKNjPsQWGiJJXy7THrXGIunweh2haeY-NYU",
+            "SUPABASE_SERVICE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmcmVzd2l6eXB3YXJ5enlxY3pyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTgwNjM5MSwiZXhwIjoyMDU3MzgyMzkxfQ.Cd21MgDhxdNzE9m91bqWPdSqUCgsEBsj5rZ8Q2eMNFs",
+            "AILEVELUP_ENTERPRISE_API_KEY": "org_4a76480580ad85c235a984ed87e8161e054cf084afc279fec803b5dfd4363fa3779773a178eb6f3a327369",
+            "ANSWERED_BY_ENABLED": "true",
+            "DEFAULT_TEMPERATURE": "1"
+        }
+    },
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "68a8cbc4-a3ac-4400-b0f9-03f2e56de102",
+    "Layers": [
+        {
+            "Arn": "arn:aws:lambda:us-east-1:688567265234:layer:ailevelup-phone-call-mcp-staging-dependencies:8",
+            "CodeSize": 2431181
+        }
+    ],
+    "State": "Active",
+    "LastUpdateStatus": "InProgress",
+    "LastUpdateStatusReason": "The function is being created.",
+    "LastUpdateStatusReasonCode": "Creating",
+    "PackageType": "Zip",
+    "Architectures": [
+        "x86_64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:8ce0861cbacc1c3e68742d7537616587fd39490817ec413514cf66613b6bed7d"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/ailevelup-phone-call-mcp-staging-make-call"
+    }
+}

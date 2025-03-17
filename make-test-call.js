@@ -30,8 +30,8 @@ const PHONE_NUMBER = '+12129965776';
 async function makeCall() {
   try {
     console.log('Making phone call...');
-    const response = await axios.post('http://localhost:3040/api/v1/phone-calls/call', {
-      phoneNumber: PHONE_NUMBER,
+    const response = await axios.post('http://localhost:3040/api/v1/call', {
+      phone_number: PHONE_NUMBER,
       voice: 'nat',
       model: 'turbo',
       task: TASK_PROMPT,

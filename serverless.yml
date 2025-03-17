@@ -1,0 +1,165 @@
+service: ailevelup-phone-call-mcp
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  environment:
+    NODE_ENV: ${opt:stage, 'dev'}
+    AILEVELUP_API_URL: ${ssm:/ailevelup/api-url}
+    AILEVELUP_ENTERPRISE_API_KEY: ${ssm:/ailevelup/enterprise-api-key}
+    AILEVELUP_API_KEY: ${ssm:/ailevelup/api-key}
+    AILEVELUP_ENCRYPTED_KEY: ${ssm:/ailevelup/encrypted-key}
+    SUPABASE_URL: ${ssm:/supabase/url}
+    SUPABASE_SERVICE_KEY: ${ssm:/supabase/service-key}
+    GOOGLE_SHEETS_PRIVATE_KEY: ${ssm:/google/sheets-private-key}
+    GOOGLE_SHEETS_CLIENT_EMAIL: ${ssm:/google/sheets-client-email}
+    GOOGLE_SHEETS_DOC_ID: ${ssm:/google/sheets-doc-id}
+    DEFAULT_VOICE: ${ssm:/voice/default-voice}
+    DEFAULT_MODEL: ${ssm:/voice/default-model}
+    DEFAULT_FROM_NUMBER: ${ssm:/voice/default-from-number}
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: 
+            - !GetAtt RateLimitTable.Arn
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+          Resource: 
+            - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ailevelup/*
+            - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/supabase/*
+            - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/google/*
+            - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/voice/*
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: '*'
+
+functions:
+  makeCall:
+    handler: functions/make-call.handler
+    events:
+      - http:
+          path: /call
+          method: post
+          cors: true
+    environment:
+      FUNCTION_NAME: make-call
+
+  getCallDetails:
+    handler: functions/get-call-details.handler
+    events:
+      - http:
+          path: /call/{callId}
+          method: get
+          cors: true
+    environment:
+      FUNCTION_NAME: get-call-details
+
+  listCalls:
+    handler: functions/list-calls.handler
+    events:
+      - http:
+          path: /calls
+          method: get
+          cors: true
+    environment:
+      FUNCTION_NAME: list-calls
+
+  updateCallStatus:
+    handler: functions/update-call-status.handler
+    events:
+      - schedule: rate(5 minutes)
+    environment:
+      FUNCTION_NAME: update-call-status
+
+  getVoiceOptions:
+    handler: functions/get-voice-options.handler
+    events:
+      - http:
+          path: /voice-options
+          method: get
+          cors: true
+    environment:
+      FUNCTION_NAME: get-voice-options
+
+  getModelOptions:
+    handler: functions/get-model-options.handler
+    events:
+      - http:
+          path: /model-options
+          method: get
+          cors: true
+    environment:
+      FUNCTION_NAME: get-model-options
+
+resources:
+  Resources:
+    RateLimitTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-rate-limits
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+          
+    AuditLogsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-audit-logs
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+          - AttributeName: timestamp
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        GlobalSecondaryIndexes:
+          - IndexName: timestamp-index
+            KeySchema:
+              - AttributeName: timestamp
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+plugins:
+  - serverless-offline
+  - serverless-dotenv-plugin
+
+custom:
+  dotenv:
+    path: .env.${opt:stage, 'dev'} 
