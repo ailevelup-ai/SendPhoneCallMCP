@@ -18,12 +18,29 @@ cat update-call-status-response.json
 # Test make-call function
 echo "Testing make-call function..."
 aws lambda invoke \
-  --function-name ailevelup-phone-call-mcp-dev-make-call \
-  --payload '{"phone_number": "+15555555555", "task": "This is a test call", "from": "+15555555555"}' \
+  --function-name ailevelup-phone-call-mcp-staging-make-call \
+  --payload '{"body": "{\"phone_number\": \"+15555555555\", \"task\": \"This is a test call\", \"from\": \"+15555555555\"}"}' \
   --region us-east-1 \
+  --cli-binary-format raw-in-base64-out \
   make-call-response.json
 
 echo "Response saved to make-call-response.json"
+echo "Response content:"
 cat make-call-response.json
+echo ""
 
-echo "Tests completed. Check the response files for details." 
+# Test check-call-status function
+echo "Testing check-call-status function..."
+aws lambda invoke \
+  --function-name ailevelup-phone-call-mcp-staging-check-call-status \
+  --payload '{"callId": "test-call-id"}' \
+  --region us-east-1 \
+  --cli-binary-format raw-in-base64-out \
+  check-call-status-response.json
+
+echo "Response saved to check-call-status-response.json"
+echo "Response content:"
+cat check-call-status-response.json
+echo ""
+
+echo "Testing complete. Check the response files for details." 

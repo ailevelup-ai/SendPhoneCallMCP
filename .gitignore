@@ -1,5 +1,39 @@
-# Dependencies
+# Deployment packages
+*.zip
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Node.js
 node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# AWS Lambda deployment packages
+*-deployment.zip
+*-package.zip
+*-fix.zip
+
+# Logs
+logs
+*.log
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Response files from testing
+*-response.json
+
+# Dependencies
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -7,7 +41,6 @@ yarn-error.log*
 .pnp.js
 
 # Environment variables
-.env
 .env.local
 .env.*.local
 .env.development.local
@@ -23,13 +56,6 @@ candystripersheets-*.json
 client_secret*.json
 service-account*.json
 key.json
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # Testing
 coverage/

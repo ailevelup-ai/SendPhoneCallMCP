@@ -2,20 +2,36 @@
  * Check the status of a Bland.AI phone call
  */
 
-require('dotenv').config();
 const axios = require('axios');
 
-// Call ID from the previous API call
-const CALL_ID = '2a5fda35-d946-4876-a620-8451d9281a64';
-
-// Check call status
-async function checkCallStatus() {
+// Lambda handler function
+exports.handler = async (event, context) => {
   try {
-    console.log(`Checking status of call ${CALL_ID}...`);
+    console.log('Event received:', JSON.stringify(event));
     
-    const response = await axios.get(`https://api.bland.ai/v1/calls/${CALL_ID}`, {
+    // Get call ID from the event
+    const callId = event.callId || process.env.DEFAULT_CALL_ID;
+    
+    if (!callId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Call ID is required' })
+      };
+    }
+    
+    console.log(`Checking status of call ${callId}...`);
+    
+    const apiKey = process.env.AILEVELUP_ENTERPRISE_API_KEY;
+    if (!apiKey) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'API key is not configured' })
+      };
+    }
+    
+    const response = await axios.get(`https://api.bland.ai/v1/calls/${callId}`, {
       headers: {
-        'Authorization': `Bearer ${process.env.AILEVELUP_ENTERPRISE_API_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       }
     });
 
@@ -39,19 +55,23 @@ async function checkCallStatus() {
       });
     }
     
-    return response.data;
+    return {
+      statusCode: 200,
+      body: JSON.stringify(callData)
+    };
   } catch (error) {
     console.error('Error checking call status:', error.message);
     if (error.response) {
       console.error('Response data:', JSON.stringify(error.response.data, null, 2));
       console.error('Response status:', error.response.status);
     }
-    return { error: error.message };
+    
+    return {
+      statusCode: error.response?.status || 500,
+      body: JSON.stringify({ 
+        error: error.message,
+        details: error.response?.data || 'No additional details'
+      })
+    };
   }
-}
-
-// Execute the function
-checkCallStatus()
-  .catch(error => {
-    console.error('Error:', error);
-  }); 
+}; 
