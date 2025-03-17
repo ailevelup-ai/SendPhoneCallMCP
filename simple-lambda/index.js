@@ -382,7 +382,16 @@ const _makeCallHandler = async (event, context) => {
     // Wait for voice mappings to be loaded
     await fetchVoiceMappings();
     
-    const body = JSON.parse(event.body);
+    // Parse the body data from the event
+    let body;
+    try {
+      body = event.body ? JSON.parse(event.body) : {};
+      console.log('Parsed body:', JSON.stringify(body));
+    } catch (parseError) {
+      console.error('Error parsing event body:', parseError);
+      console.log('Raw event body:', event.body);
+      body = {};
+    }
     
     // Check if authorizer exists, otherwise use a default user ID
     let userId;
@@ -405,18 +414,26 @@ const _makeCallHandler = async (event, context) => {
       });
     }
 
+    // Use the specified test numbers if this is a test user
+    const isTestUser = userId === 'test-user-id' || userId.includes('test') || userId === process.env.TEST_USER_ID;
+    
+    // Extract parameters from the request body with defaults for test calls
     const {
-      phone_number,
-      task,
+      phone_number: requestedPhoneNumber,
+      task = "This is a test call from AWS Lambda",
       voice = process.env.DEFAULT_VOICE,
       webhook_url,
-      from_number,
+      from_number: requestedFromNumber,
       model: requestModel, // Rename to requestModel to preserve the original value but not use it
       temperature = parseFloat(process.env.DEFAULT_TEMPERATURE) || 1,
       voicemail_action = process.env.DEFAULT_VOICEMAIL_ACTION || 'hangup',
       answered_by_enabled = process.env.ANSWERED_BY_ENABLED === 'true',
       max_duration
     } = body;
+    
+    // Use the specific phone numbers for testing or the ones from the request
+    const phone_number = isTestUser ? (requestedPhoneNumber || "+12129965776") : requestedPhoneNumber;
+    const from_number = isTestUser ? (requestedFromNumber || "+15615665857") : requestedFromNumber;
 
     // Always use "turbo" model
     const model = "turbo";
@@ -453,6 +470,7 @@ const _makeCallHandler = async (event, context) => {
     // Ensure from_number is explicitly set 
     const fromNumber = from_number || process.env.DEFAULT_FROM_NUMBER;
     console.log('Using from number:', fromNumber);
+    console.log('Using phone number:', phone_number);
     console.log('Encrypted key:', process.env.AILEVELUP_ENCRYPTED_KEY);
 
     // Validate required fields
