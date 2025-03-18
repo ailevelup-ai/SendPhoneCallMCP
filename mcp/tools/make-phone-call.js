@@ -26,7 +26,7 @@ const parametersSchema = {
     voice: {
       type: 'string',
       description: 'Voice ID to use for the call (UUID format)',
-      default: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4' // Default to Alloy voice
+      default: '4a5c3c9b-19bc-4ae7-9d58-a96950e97ef5' // Default to customer's preferred voice
     },
     fromNumber: {
       type: 'string',
@@ -129,7 +129,7 @@ async function execute(params, context) {
   const requestBody = {
     phone_number: params.phoneNumber,
     task: params.task,
-    voice: params.voice,
+    voice: params.voice, // Using the voice ID directly from Supabase
     from_number: params.fromNumber || defaultFromNumber,
     model: 'turbo', // Always use turbo model for ailevelup.AI calls
     temperature: params.temperature,
@@ -191,7 +191,7 @@ async function execute(params, context) {
       phone_number: params.phoneNumber,
       status: 'initiated',
       task: params.task,
-      voice: params.voice || 'nat',
+      voice: params.voice,
       from_number: params.fromNumber || defaultFromNumber,
       model: 'turbo', // Always use turbo in database
       temperature: params.temperature || 1,
@@ -244,7 +244,6 @@ async function execute(params, context) {
     
     // Return successful response
     return {
-      success: true,
       callId: callId,
       status: 'initiated',
       message: responseData.message || 'Call initiated successfully'

@@ -1,11 +1,12 @@
 /**
  * MCP Tool: Get Voice Options
  * 
- * This tool retrieves the available voice options for ailevelup.AI phone calls.
+ * This tool retrieves the available voice options from Supabase for phone calls.
  */
 
 const { JSONSchemaValidator } = require('../lib/validators');
 const { logger } = require('../../utils/logger');
+const { supabaseAdmin } = require('../../config/supabase');
 const { redisClient } = require('../../config/redis');
 
 // Schema for tool parameters (empty object, no parameters needed)
@@ -15,61 +16,9 @@ const parametersSchema = {
   additionalProperties: false
 };
 
-// Voice options with additional metadata
-const VOICE_OPTIONS = [
-  {
-    id: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4',
-    name: 'Alloy',
-    description: 'Clear and professional voice',
-    gender: 'neutral',
-    useCase: 'general purpose',
-    sample: 'https://api.ailevelup.ai/samples/alloy.mp3'
-  },
-  {
-    id: '7d132ef1-c295-4b87-b27b-9f12ec64246d',
-    name: 'Echo',
-    description: 'Resonant and dynamic voice',
-    gender: 'neutral',
-    useCase: 'professional services',
-    sample: 'https://api.ailevelup.ai/samples/echo.mp3'
-  },
-  {
-    id: '0f4958b1-3765-46b3-8df3-9b10424ff0f2',
-    name: 'Fable',
-    description: 'Engaging storyteller voice',
-    gender: 'neutral',
-    useCase: 'customer service',
-    sample: 'https://api.ailevelup.ai/samples/fable.mp3'
-  },
-  {
-    id: 'a61e4166-43c9-48ec-b694-5b6747517f2f',
-    name: 'Onyx',
-    description: 'Deep and authoritative voice',
-    gender: 'neutral',
-    useCase: 'business calls',
-    sample: 'https://api.ailevelup.ai/samples/onyx.mp3'
-  },
-  {
-    id: '42f34de3-e147-4538-90e1-1302563d8b11',
-    name: 'Nova',
-    description: 'Warm and friendly voice',
-    gender: 'neutral',
-    useCase: 'information services',
-    sample: 'https://api.ailevelup.ai/samples/nova.mp3'
-  },
-  {
-    id: 'ff1ccc45-487c-4911-9351-8a95f12ba832',
-    name: 'Shimmer',
-    description: 'Bright and energetic voice',
-    gender: 'neutral',
-    useCase: 'sales and marketing',
-    sample: 'https://api.ailevelup.ai/samples/shimmer.mp3'
-  }
-];
-
 // Cache key for voice options
 const VOICE_OPTIONS_CACHE_KEY = 'voice_options';
-const CACHE_TTL_SECONDS = 86400; // 24 hours
+const CACHE_TTL_SECONDS = 900; // 15 minutes
 
 // Validator for parameters
 const validator = new JSONSchemaValidator();
@@ -100,38 +49,58 @@ function validateParameters(params) {
 async function execute(params, context) {
   const { sessionId, userId } = context;
 
-  logger.info('Getting available voice options', { 
+  logger.info('Getting available voice options from Supabase', { 
     sessionId,
     userId
   });
 
   try {
     // Try to get voice options from cache first
-    if (redisClient.isReady) {
+    if (redisClient && redisClient.isReady) {
       try {
         const cachedOptions = await redisClient.get(VOICE_OPTIONS_CACHE_KEY);
         if (cachedOptions) {
           logger.debug('Retrieved voice options from cache', { sessionId });
-          return JSON.parse(cachedOptions);
+          return { voices: JSON.parse(cachedOptions) };
         }
       } catch (cacheError) {
         logger.warn(`Error retrieving voice options from cache: ${cacheError.message}`, {
           sessionId,
           error: cacheError
         });
-        // Continue with default options if cache fails
+        // Continue with database query if cache fails
       }
     }
 
-    // For future implementation: call ailevelup.AI API to get the latest voice options
-    // For now, return the hardcoded options
+    // Fetch voices from Supabase
+    const { data: voices, error } = await supabaseAdmin
+      .from('voices')
+      .select('*')
+      .eq('public', true)
+      .order('name', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to fetch voices from database: ${error.message}`);
+    }
+
+    // Map the voice data to the expected format
+    const formattedVoices = voices.map(voice => ({
+      id: voice.id,
+      name: voice.name.replace(/^Public - /, ''), // Remove "Public - " prefix if present
+      description: voice.description || '',
+      gender: voice.tags?.includes('female') ? 'female' : 
+              voice.tags?.includes('male') ? 'male' : 'neutral',
+      accent: voice.tags?.find(tag => ['american', 'british', 'australian', 'indian', 'spanish', 'french', 'german', 'italian', 'japanese', 'chinese', 'russian', 'portuguese', 'dutch', 'swedish'].includes(tag)) || 'other',
+      tags: voice.tags || [],
+      sample: voice.sample_url || null
+    }));
 
     // Cache the voice options if Redis is available
-    if (redisClient.isReady) {
+    if (redisClient && redisClient.isReady) {
       try {
         await redisClient.set(
           VOICE_OPTIONS_CACHE_KEY,
-          JSON.stringify(VOICE_OPTIONS),
+          JSON.stringify(formattedVoices),
           { EX: CACHE_TTL_SECONDS }
         );
       } catch (cacheError) {
@@ -143,12 +112,12 @@ async function execute(params, context) {
       }
     }
 
-    logger.info('Successfully retrieved voice options', {
+    logger.info('Successfully retrieved voice options from Supabase', {
       sessionId,
-      voiceCount: VOICE_OPTIONS.length
+      voiceCount: formattedVoices.length
     });
 
-    return VOICE_OPTIONS;
+    return { voices: formattedVoices };
   } catch (error) {
     logger.error(`Error executing getVoiceOptions tool: ${error.message}`, {
       sessionId,
@@ -161,7 +130,7 @@ async function execute(params, context) {
 // Tool definition for MCP
 const getVoiceOptionsTool = {
   name: 'getVoiceOptions',
-  description: 'Get available voice options for phone calls',
+  description: 'Get available voice options for phone calls from the Supabase database',
   parameters: parametersSchema,
   validateParameters,
   execute
