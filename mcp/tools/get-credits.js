@@ -20,6 +20,9 @@ const parametersSchema = {
 const CREDITS_CACHE_PREFIX = 'user_credits_';
 const CACHE_TTL_SECONDS = 300; // 5 minutes
 
+// Development UUID for testing
+const DEV_TEST_UUID = process.env.TEST_USER_ID || '137c52cea5d751fa810bf1ff9f727f4fd15809a3d06b7d55d1b7d529e69104a4';
+
 // Validator for parameters
 const validator = new JSONSchemaValidator();
 
@@ -57,25 +60,35 @@ function getCreditsCacheKey(userId) {
  */
 async function execute(params, context) {
   const { sessionId, userId } = context;
+  
+  // Handle development user ID
+  let actualUserId = userId;
+  if (process.env.NODE_ENV === 'development' && (userId === 'dev-user-id' || !userId)) {
+    logger.info(`Using test UUID for development: ${DEV_TEST_UUID}`, { 
+      sessionId,
+      originalUserId: userId
+    });
+    actualUserId = DEV_TEST_UUID;
+  }
 
   logger.info(`Getting credit balance for user`, { 
     sessionId,
-    userId
+    userId: actualUserId
   });
 
   try {
     // Try to get credits from cache first
     if (redisClient.isReady) {
       try {
-        const cachedCredits = await redisClient.get(getCreditsCacheKey(userId));
+        const cachedCredits = await redisClient.get(getCreditsCacheKey(actualUserId));
         if (cachedCredits) {
-          logger.debug('Retrieved credits from cache', { sessionId, userId });
+          logger.debug('Retrieved credits from cache', { sessionId, userId: actualUserId });
           return JSON.parse(cachedCredits);
         }
       } catch (cacheError) {
         logger.warn(`Error retrieving credits from cache: ${cacheError.message}`, {
           sessionId,
-          userId,
+          userId: actualUserId,
           error: cacheError
         });
         // Continue with database query if cache fails
@@ -86,13 +99,13 @@ async function execute(params, context) {
     const { data: credits, error: dbError } = await supabase
       .from('credits')
       .select('balance, updated_at')
-      .eq('user_id', userId)
+      .eq('user_id', actualUserId)
       .single();
 
     if (dbError) {
       logger.error(`Database error retrieving credits: ${dbError.message}`, {
         sessionId,
-        userId,
+        userId: actualUserId,
         error: dbError
       });
       
@@ -107,7 +120,24 @@ async function execute(params, context) {
         
         logger.info(`Returning default credits for new user`, {
           sessionId,
-          userId
+          userId: actualUserId
+        });
+        
+        return defaultCredits;
+      }
+      
+      // In development mode, if user is not found, return default values
+      if (process.env.NODE_ENV === 'development' && (dbError.code === 'PGRST104' || dbError.code === '22P02')) {
+        const defaultCredits = {
+          balance: 100, // Give plenty of credits in development mode
+          totalAdded: 100,
+          totalUsed: 0,
+          lastUpdated: new Date().toISOString()
+        };
+        
+        logger.info(`Returning default development credits`, {
+          sessionId,
+          userId: actualUserId
         });
         
         return defaultCredits;
@@ -129,7 +159,7 @@ async function execute(params, context) {
       const { data: extraData, error: extraError } = await supabase
         .from('credits')
         .select('total_added, total_used')
-        .eq('user_id', userId)
+        .eq('user_id', actualUserId)
         .single();
         
       if (!extraError && extraData) {
@@ -140,7 +170,7 @@ async function execute(params, context) {
       // Silently handle missing columns
       logger.warn(`Credits table is missing some columns, using defaults`, {
         sessionId,
-        userId
+        userId: actualUserId
       });
     }
 
@@ -148,14 +178,14 @@ async function execute(params, context) {
     if (redisClient.isReady) {
       try {
         await redisClient.set(
-          getCreditsCacheKey(userId),
+          getCreditsCacheKey(actualUserId),
           JSON.stringify(creditsResponse),
           { EX: CACHE_TTL_SECONDS }
         );
       } catch (cacheError) {
         logger.warn(`Failed to cache credits: ${cacheError.message}`, {
           sessionId,
-          userId,
+          userId: actualUserId,
           error: cacheError
         });
         // Continue execution even if caching fails
@@ -164,7 +194,7 @@ async function execute(params, context) {
 
     logger.info(`Successfully retrieved credit balance`, {
       sessionId,
-      userId,
+      userId: actualUserId,
       balance: creditsResponse.balance
     });
 
@@ -172,7 +202,7 @@ async function execute(params, context) {
   } catch (error) {
     logger.error(`Error executing getCredits tool: ${error.message}`, {
       sessionId,
-      userId,
+      userId: actualUserId,
       error
     });
     throw error;

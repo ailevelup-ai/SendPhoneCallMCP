@@ -18,7 +18,7 @@ const parametersSchema = {
 // Voice options with additional metadata
 const VOICE_OPTIONS = [
   {
-    id: 'alloy',
+    id: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4',
     name: 'Alloy',
     description: 'Clear and professional voice',
     gender: 'neutral',
@@ -26,7 +26,7 @@ const VOICE_OPTIONS = [
     sample: 'https://api.ailevelup.ai/samples/alloy.mp3'
   },
   {
-    id: 'echo',
+    id: '7d132ef1-c295-4b87-b27b-9f12ec64246d',
     name: 'Echo',
     description: 'Resonant and dynamic voice',
     gender: 'neutral',
@@ -34,7 +34,7 @@ const VOICE_OPTIONS = [
     sample: 'https://api.ailevelup.ai/samples/echo.mp3'
   },
   {
-    id: 'fable',
+    id: '0f4958b1-3765-46b3-8df3-9b10424ff0f2',
     name: 'Fable',
     description: 'Engaging storyteller voice',
     gender: 'neutral',
@@ -42,7 +42,7 @@ const VOICE_OPTIONS = [
     sample: 'https://api.ailevelup.ai/samples/fable.mp3'
   },
   {
-    id: 'onyx',
+    id: 'a61e4166-43c9-48ec-b694-5b6747517f2f',
     name: 'Onyx',
     description: 'Deep and authoritative voice',
     gender: 'neutral',
@@ -50,7 +50,7 @@ const VOICE_OPTIONS = [
     sample: 'https://api.ailevelup.ai/samples/onyx.mp3'
   },
   {
-    id: 'nova',
+    id: '42f34de3-e147-4538-90e1-1302563d8b11',
     name: 'Nova',
     description: 'Warm and friendly voice',
     gender: 'neutral',
@@ -58,7 +58,7 @@ const VOICE_OPTIONS = [
     sample: 'https://api.ailevelup.ai/samples/nova.mp3'
   },
   {
-    id: 'shimmer',
+    id: 'ff1ccc45-487c-4911-9351-8a95f12ba832',
     name: 'Shimmer',
     description: 'Bright and energetic voice',
     gender: 'neutral',

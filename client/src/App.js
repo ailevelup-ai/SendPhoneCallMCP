@@ -1,14 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
-function DirectCallForm({ sessionId, voices }) {
+// eslint-disable-next-line
+function VoiceItem({ voice, onPlay, isPlaying }) {
+  return (
+    <div className="voice-item">
+      <h3>{voice.name}</h3>
+      <p>{voice.description}</p>
+      <button 
+        className={`play-button ${isPlaying ? 'playing' : ''}`} 
+        onClick={() => onPlay(voice)}
+        disabled={isPlaying}
+      >
+        {isPlaying ? 'Playing...' : 'Play Sample'}
+      </button>
+    </div>
+  );
+}
+
+function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlayingVoice, fetchCallHistoryRef }) {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [task, setTask] = useState('');
   const [selectedVoice, setSelectedVoice] = useState('');
-  const [maxDuration, setMaxDuration] = useState(300);
-  const [temperature, setTemperature] = useState(0.7);
   const [status, setStatus] = useState('');
+  const [temperature, setTemperature] = useState(1);
+  const [maxDuration, setMaxDuration] = useState(300);
   const [phoneNumberError, setPhoneNumberError] = useState('');
+  
+  // Update selected voice when voices are loaded
+  useEffect(() => {
+    if (voices.length > 0 && !selectedVoice) {
+      setSelectedVoice(voices[0].id);
+    }
+  }, [voices, selectedVoice]);
 
   // Function to format phone number into E.164 format
   const formatToE164 = (input) => {
@@ -71,24 +95,39 @@ function DirectCallForm({ sessionId, voices }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Format the phone number before validation
-    const formattedNumber = formatToE164(phoneNumber);
-    setPhoneNumber(formattedNumber);
-    
-    if (!validatePhoneNumber(formattedNumber)) {
+    // Validate phone number
+    if (!phoneNumber) {
+      setPhoneNumberError('Phone number is required');
       return;
     }
     
+    // Format phone number (ensure it has a '+' prefix for international format)
+    const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+    
     setStatus('Initiating call...');
-
+    
     try {
+      // Use the auth headers that worked for initialization
+      const headers = {
+        ...(window.authHeaders || {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ailevelup-mcp'
+        }),
+        'MCP-Session-Id': sessionId
+      };
+      
+      console.log('Making phone call with parameters:', {
+        phoneNumber: formattedNumber,
+        task,
+        voice: selectedVoice,
+        maxDuration,
+        temperature,
+        model: 'turbo' // Always use turbo model
+      });
+      
       const response = await fetch('/api/v1/mcp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ailevelup-mcp',
-          'MCP-Session-Id': sessionId
-        },
+        headers,
         body: JSON.stringify({
           jsonrpc: '2.0',
           id: 4,
@@ -100,21 +139,78 @@ function DirectCallForm({ sessionId, voices }) {
               task,
               voice: selectedVoice,
               maxDuration,
-              temperature
+              temperature,
+              model: 'turbo' // Always use turbo model
             }
           }
         })
       });
 
       const data = await response.json();
+      console.log('Phone call response:', data);
       
       if (data.result) {
         setStatus(`Call initiated successfully! Call ID: ${data.result.callId}`);
+        // After successful call, refresh the call history
+        if (fetchCallHistoryRef.current) {
+          fetchCallHistoryRef.current();
+        }
       } else if (data.error) {
-        setStatus(`Error: ${data.error.message}`);
+        setStatus(`Error: ${data.error.message || JSON.stringify(data.error)}`);
       }
     } catch (error) {
+      console.error('Error making call:', error);
       setStatus(`Error: ${error.message}`);
+    }
+  };
+
+  const playVoiceSample = async (voice) => {
+    try {
+      const sampleText = "Hello there! This is a sample of my voice. I can help you make phone calls and perform various tasks over the phone.";
+      
+      setCurrentPlayingVoice(voice.id);
+      
+      // Use the auth headers that worked for initialization if available
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(window.authHeaders || {
+          'Authorization': 'Bearer ailevelup-mcp'
+        })
+      };
+      
+      const response = await fetch('/api/voice-sample', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          voice_id: voice.id,
+          text: sampleText
+        })
+      });
+      
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        
+        audio.onended = () => {
+          setCurrentPlayingVoice(null);
+          URL.revokeObjectURL(audioUrl); // Clean up blob URL when done
+        };
+        
+        audio.onerror = () => {
+          console.error('Error playing audio sample');
+          setCurrentPlayingVoice(null);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        await audio.play();
+      } else {
+        console.error('Failed to generate voice sample');
+        setCurrentPlayingVoice(null);
+      }
+    } catch (error) {
+      console.error('Error playing voice sample:', error);
+      setCurrentPlayingVoice(null);
     }
   };
 
@@ -123,77 +219,90 @@ function DirectCallForm({ sessionId, voices }) {
       <h2>Make a Direct Call</h2>
       
       <div className="form-group">
-        <label htmlFor="phoneNumber">Phone Number (E.164 format):</label>
+        <label htmlFor="phoneNumber">Phone Number</label>
         <input
           type="tel"
           id="phoneNumber"
           value={phoneNumber}
           onChange={handlePhoneNumberChange}
           onBlur={handlePhoneNumberBlur}
-          placeholder="+12125551234"
-          required
+          placeholder="+1 (555) 555-5555"
+          className={phoneNumberError ? 'error' : ''}
         />
-        <small className="help-text">Examples: (212)555-1234, 212 555 1234, or +12125551234</small>
         {phoneNumberError && <div className="error-message">{phoneNumberError}</div>}
       </div>
-
+      
       <div className="form-group">
-        <label htmlFor="task">Task/Prompt:</label>
+        <label htmlFor="task">Task Description</label>
         <textarea
           id="task"
           value={task}
           onChange={(e) => setTask(e.target.value)}
-          placeholder="What should the AI do on this call?"
-          required
+          placeholder="Describe what the AI should do on this call..."
         />
       </div>
-
+      
       <div className="form-group">
-        <label htmlFor="voice">Voice:</label>
-        <select
-          id="voice"
-          value={selectedVoice}
-          onChange={(e) => setSelectedVoice(e.target.value)}
-          required
-        >
-          <option value="">Select a voice</option>
-          {voices.map((voice) => (
-            <option key={voice.id} value={voice.id}>
-              {voice.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="maxDuration">Max Duration (seconds):</label>
-        <input
-          type="number"
-          id="maxDuration"
-          value={maxDuration}
-          onChange={(e) => setMaxDuration(Number(e.target.value))}
-          min="60"
-          max="3600"
-        />
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="temperature">Temperature:</label>
+        <label htmlFor="temperature">Temperature (Creativity)</label>
         <input
           type="range"
           id="temperature"
-          value={temperature}
-          onChange={(e) => setTemperature(Number(e.target.value))}
           min="0"
-          max="1"
+          max="2"
           step="0.1"
+          value={temperature}
+          onChange={(e) => setTemperature(parseFloat(e.target.value))}
         />
         <span>{temperature}</span>
       </div>
 
-      <button type="submit">Make Call</button>
-
-      {status && <div className="status-message">{status}</div>}
+      <div className="form-group">
+        <label htmlFor="maxDuration">Max Duration (seconds)</label>
+        <input
+          type="number"
+          id="maxDuration"
+          min="60"
+          max="1800"
+          value={maxDuration}
+          onChange={(e) => setMaxDuration(parseInt(e.target.value))}
+        />
+      </div>
+      
+      <div className="voice-select-container">
+        <label>Select Voice</label>
+        <div className="voice-options">
+          {voices.map(voice => (
+            <div
+              key={voice.id}
+              className={`voice-option ${selectedVoice === voice.id ? 'selected' : ''}`}
+              onClick={() => setSelectedVoice(voice.id)}
+            >
+              <button
+                type="button"
+                className={`voice-play-button ${currentPlayingVoice === voice.id ? 'playing' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playVoiceSample(voice);
+                }}
+              >
+                {currentPlayingVoice === voice.id ? '■' : '▶'}
+              </button>
+              <div className="voice-details">
+                <div className="voice-name">{voice.name}</div>
+                <div className="voice-accent">{voice.gender}, {voice.accent}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <button type="submit" className="submit-button">Make Call</button>
+      
+      {status && (
+        <div className={`status-message ${status.includes('successfully') ? 'success' : status.includes('Error') ? 'error' : ''}`}>
+          {status}
+        </div>
+      )}
     </form>
   );
 }
@@ -202,23 +311,29 @@ function CreditsManager({ sessionId }) {
   const [credits, setCredits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchCredits();
-  }, []);
+  const [showStripeForm, setShowStripeForm] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
 
   const fetchCredits = async () => {
+    if (!sessionId) return;
+    
+    setLoading(true);
     try {
+      // Use the auth headers that worked for initialization
+      const headers = {
+        ...(window.authHeaders || {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ailevelup-mcp'
+        }),
+        'MCP-Session-Id': sessionId
+      };
+      
       const response = await fetch('/api/v1/mcp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ailevelup-mcp',
-          'MCP-Session-Id': sessionId
-        },
+        headers,
         body: JSON.stringify({
           jsonrpc: '2.0',
-          id: 5,
+          id: 3,
           method: 'tools/execute',
           params: {
             name: 'getCredits',
@@ -230,26 +345,307 @@ function CreditsManager({ sessionId }) {
       const data = await response.json();
       
       if (data.result) {
-        setCredits(data.result.balance);
-      } else if (data.error) {
-        setError(`Failed to fetch credits: ${data.error.message}`);
+        // Handle both possible response structures
+        setCredits(data.result);
+        setError(null);
+      } else {
+        setError(data.error ? data.error.message : 'Failed to fetch credits');
       }
     } catch (error) {
+      console.error('Error fetching credits:', error);
       setError(`Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch credits when component mounts or sessionId changes
+  useEffect(() => {
+    if (sessionId) {
+      fetchCredits();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  // Format the credit value for display with proper null checks
+  const formatCredits = (creditsData) => {
+    if (!creditsData) return '0.00';
+    
+    // Check different possible structures based on API response
+    if (typeof creditsData === 'number') {
+      return creditsData.toFixed(2);
+    }
+    
+    if (creditsData.balance !== undefined && creditsData.balance !== null) {
+      return Number(creditsData.balance).toFixed(2);
+    }
+    
+    return '0.00';
+  };
+
+  // Credit purchase plans
+  const creditPlans = [
+    { id: 'credits_10', name: '10 Credits', price: 5.00, credits: 10 },
+    { id: 'credits_50', name: '50 Credits', price: 20.00, credits: 50 },
+    { id: 'credits_100', name: '100 Credits', price: 35.00, credits: 100 },
+  ];
+
+  // Subscription plans
+  const subscriptionPlans = [
+    { id: 'sub_basic', name: 'Basic Monthly', price: 19.99, creditsPerMonth: 50 },
+    { id: 'sub_pro', name: 'Pro Monthly', price: 49.99, creditsPerMonth: 150 },
+    { id: 'sub_enterprise', name: 'Enterprise Monthly', price: 99.99, creditsPerMonth: 350 }
+  ];
+
+  // Handle opening Stripe checkout for one-time purchases
+  const handlePurchaseCredits = (plan) => {
+    setSelectedPlan(plan);
+    setShowStripeForm(true);
+    // In a real implementation, you'd redirect to a Stripe checkout page or open a Stripe modal
+    console.log(`Opening Stripe checkout for ${plan.name} plan at $${plan.price}`);
+    
+    // Example of how you might open a Stripe checkout
+    // window.open(`https://your-stripe-checkout-url?plan=${plan.id}&session=${sessionId}`, '_blank');
+  };
+
+  // Handle opening Stripe checkout for subscriptions
+  const handleSubscribe = (plan) => {
+    setSelectedPlan(plan);
+    setShowStripeForm(true);
+    // In a real implementation, you'd redirect to a Stripe checkout page or open a Stripe modal
+    console.log(`Opening Stripe subscription checkout for ${plan.name} plan at $${plan.price}/month`);
+    
+    // Example of how you might open a Stripe checkout for subscriptions
+    // window.open(`https://your-stripe-subscription-url?plan=${plan.id}&session=${sessionId}`, '_blank');
+  };
+
+  // Simulating a Stripe form (in production, you'd use Stripe Elements or Checkout)
+  const StripeForm = () => (
+    <div className="stripe-form">
+      <h3>Complete Purchase</h3>
+      <p>Plan: {selectedPlan?.name}</p>
+      <p>Price: ${selectedPlan?.price.toFixed(2)}</p>
+      
+      <div className="form-group">
+        <label htmlFor="card-number">Card Number</label>
+        <input type="text" id="card-number" placeholder="4242 4242 4242 4242" />
+      </div>
+      
+      <div className="form-row">
+        <div className="form-group">
+          <label htmlFor="expiry">Expiry (MM/YY)</label>
+          <input type="text" id="expiry" placeholder="MM/YY" />
+        </div>
+        <div className="form-group">
+          <label htmlFor="cvc">CVC</label>
+          <input type="text" id="cvc" placeholder="123" />
+        </div>
+      </div>
+      
+      <div className="button-row">
+        <button 
+          className="cancel-button" 
+          onClick={() => setShowStripeForm(false)}
+        >
+          Cancel
+        </button>
+        <button 
+          className="pay-button"
+          onClick={() => {
+            alert(`Payment of $${selectedPlan.price.toFixed(2)} processed! Credits will be added shortly.`);
+            setShowStripeForm(false);
+            // In a real app, you'd process the payment through Stripe
+          }}
+        >
+          Pay ${selectedPlan?.price.toFixed(2)}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="credits-manager">
-      <h2>Credits Balance</h2>
-      {loading && <div>Loading credits...</div>}
-      {error && <div className="error">{error}</div>}
-      {credits !== null && (
-        <div className="credits-balance">
-          <p>Available Credits: {credits}</p>
-          <button onClick={fetchCredits}>Refresh Balance</button>
+      <h2>Credits</h2>
+      {loading ? (
+        <p>Loading credits...</p>
+      ) : error ? (
+        <div className="error-message">{error}</div>
+      ) : showStripeForm ? (
+        <StripeForm />
+      ) : (
+        <>
+          <div className="credits-balance">
+            <h3>Available Credits</h3>
+            <div className="credits-value">{formatCredits(credits)}</div>
+            
+            {credits && credits.totalAdded !== undefined && (
+              <div className="credits-stats">
+                <div className="stat">
+                  <span className="stat-label">Total Added:</span>
+                  <span className="stat-value">{Number(credits.totalAdded || 0).toFixed(2)}</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">Total Used:</span>
+                  <span className="stat-value">{Number(credits.totalUsed || 0).toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+            
+            <button className="refresh-button" onClick={fetchCredits}>
+              Refresh
+            </button>
+          </div>
+          
+          <div className="purchase-section">
+            <h3>Purchase Credits</h3>
+            <div className="plan-options">
+              {creditPlans.map(plan => (
+                <div key={plan.id} className="plan-card">
+                  <div className="plan-name">{plan.name}</div>
+                  <div className="plan-price">${plan.price.toFixed(2)}</div>
+                  <button 
+                    className="purchase-button"
+                    onClick={() => handlePurchaseCredits(plan)}
+                  >
+                    Buy Now
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="subscription-section">
+            <h3>Subscribe and Save</h3>
+            <div className="plan-options">
+              {subscriptionPlans.map(plan => (
+                <div key={plan.id} className="plan-card">
+                  <div className="plan-name">{plan.name}</div>
+                  <div className="plan-price">${plan.price.toFixed(2)}<span className="per-month">/month</span></div>
+                  <div className="plan-feature">{plan.creditsPerMonth} credits per month</div>
+                  <button 
+                    className="subscribe-button"
+                    onClick={() => handleSubscribe(plan)}
+                  >
+                    Subscribe
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CallLogManager({ sessionId, setFetchCallHistoryRef }) {
+  const [callHistory, setCallHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Function to fetch call history - wrap in useCallback to prevent dependency issues
+  const fetchCallHistory = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Use the auth headers that worked for initialization
+      const headers = {
+        ...(window.authHeaders || {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ailevelup-mcp'
+        }),
+        'MCP-Session-Id': sessionId
+      };
+      
+      const response = await fetch('/api/v1/mcp', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 5,
+          method: 'tools/execute',
+          params: {
+            name: 'getCallHistory',
+            arguments: {}
+          }
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.result && data.result.calls) {
+        setCallHistory(data.result.calls);
+      } else {
+        console.error('Failed to fetch call history:', data.error);
+      }
+    } catch (error) {
+      console.error('Error fetching call history:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId]);
+  
+  // Set the fetchCallHistory function in the parent
+  useEffect(() => {
+    if (setFetchCallHistoryRef) {
+      setFetchCallHistoryRef(fetchCallHistory);
+    }
+  }, [setFetchCallHistoryRef, fetchCallHistory]);
+  
+  // Fetch call history on component mount
+  useEffect(() => {
+    if (sessionId) {
+      fetchCallHistory();
+    }
+  }, [sessionId, fetchCallHistory]);
+  
+  // Format date function
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString();
+  };
+  
+  // Format duration in minutes and seconds
+  const formatDuration = (seconds) => {
+    if (!seconds || isNaN(seconds)) return 'N/A';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+  };
+  
+  return (
+    <div className="call-log-manager">
+      <div className="call-log-header">
+        <h2>Call Log</h2>
+        <button 
+          className="refresh-button" 
+          onClick={fetchCallHistory}
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
+      </div>
+      
+      {loading ? (
+        <div className="loading-indicator">Loading call history...</div>
+      ) : callHistory.length === 0 ? (
+        <div className="no-calls">No calls have been made yet.</div>
+      ) : (
+        <div className="call-table">
+          <div className="call-header">
+            <div className="call-cell">Phone</div>
+            <div className="call-cell">Status</div>
+            <div className="call-cell">Duration</div>
+            <div className="call-cell">Date</div>
+          </div>
+          
+          {callHistory.map(call => (
+            <div key={call.id} className={`call-row ${call.status.toLowerCase()}`}>
+              <div className="call-cell">{call.phone_number}</div>
+              <div className="call-cell">{call.status}</div>
+              <div className="call-cell">{formatDuration(call.duration)}</div>
+              <div className="call-cell">{formatDate(call.created_at)}</div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -259,145 +655,195 @@ function CreditsManager({ sessionId }) {
 function App() {
   const [sessionId, setSessionId] = useState(null);
   const [voices, setVoices] = useState([]);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [currentPlayingVoice, setCurrentPlayingVoice] = useState(null);
+  const audioRef = useRef(new Audio());
+  const fetchCallHistoryRef = useRef(null);
+
+  // Set the fetchCallHistory reference function
+  const setFetchCallHistoryRef = (fetchFn) => {
+    fetchCallHistoryRef.current = fetchFn;
+  };
 
   useEffect(() => {
-    // Initialize MCP session
+    // Initialize session with proper authentication
     initializeSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initializeSession = async () => {
     try {
-      setLoading(true);
+      console.log('Initializing MCP session...');
+      
+      let authHeaders = {
+        'Content-Type': 'application/json'
+      };
+      
+      console.log('Attempting MCP connection...');
+      try {
+        const response = await fetch('/api/v1/mcp', {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: {
+              clientInfo: {
+                name: 'bland-ai-web-client',
+                version: '1.0.0'
+              }
+            }
+          })
+        });
+
+        console.log('MCP Response Status:', response.status);
+        
+        const data = await response.json();
+        console.log('Session initialization response:', data);
+        
+        if (data.result && data.result.sessionId) {
+          const sid = data.result.sessionId;
+          setSessionId(sid);
+          
+          // Store auth headers for future requests
+          window.authHeaders = authHeaders;
+          
+          // After session is initialized, fetch voices
+          fetchVoices(sid, authHeaders);
+        } else {
+          console.error('Failed to initialize session:', data.error || 'No session ID returned');
+          throw new Error(data.error?.message || 'Failed to initialize session');
+        }
+      } catch (error) {
+        console.error('Error during fetch:', error);
+        throw error; // Re-throw to be caught by outer try/catch
+      }
+    } catch (error) {
+      console.error('Error initializing session:', error);
+      // Don't alert here, just log the error
+      // The app will show "Initializing session..." which is better than an alert
+    }
+  };
+
+  const fetchVoices = async (sid, authHeaders) => {
+    try {
+      // Use the same auth headers that worked for initialization
+      const headers = {
+        ...authHeaders,
+        'MCP-Session-Id': sid
+      };
+      
       const response = await fetch('/api/v1/mcp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ailevelup-mcp'
-        },
+        headers,
         body: JSON.stringify({
           jsonrpc: '2.0',
-          id: 1,
-          method: 'initialize',
+          id: 2,
+          method: 'tools/execute',
           params: {
-            clientName: 'web-client',
-            clientVersion: '1.0.0'
+            name: 'getVoiceOptions',
+            arguments: {}
           }
         })
       });
 
       const data = await response.json();
       
-      // Get the session ID from response headers
-      const sessionId = response.headers.get('MCP-Session-Id') || 
-                        response.headers.get('mcp-session-id');
-      
-      if (sessionId) {
-        console.log('Session initialized with ID:', sessionId);
-        setSessionId(sessionId);
-        // After getting session, fetch voices
-        fetchVoices(sessionId);
+      if (data.result && data.result.voices) {
+        setVoices(data.result.voices);
       } else {
-        console.error('No session ID received from server');
-        
-        if (data.result && data.result.sessionId) {
-          console.log('Using session ID from response body as fallback');
-          setSessionId(data.result.sessionId);
-          fetchVoices(data.result.sessionId);
-        } else {
-          setError('Failed to initialize session: No session ID found in response');
-        }
-      }
-      
-      if (data.error) {
-        console.error('Error initializing session:', data.error);
-        setError(`Failed to initialize session: ${data.error.message}`);
+        console.error('No voices found:', data.error);
       }
     } catch (error) {
-      console.error('Error:', error);
-      setError('Failed to initialize session');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching voices:', error);
     }
   };
 
-  const fetchVoices = async (sid) => {
-    if (!sid) return;
-    try {
-      setLoading(true);
-      // Define the voice options with the correct IDs from the user
-      const voiceOptions = [
-        { id: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4', name: 'Alloy', description: 'Clear and professional voice' },
-        { id: '7d132ef1-c295-4b87-b27b-9f12ec64246d', name: 'Echo', description: 'Resonant and dynamic voice' },
-        { id: '0f4958b1-3765-46b3-8df3-9b10424ff0f2', name: 'Fable', description: 'Engaging storyteller voice' },
-        { id: 'a61e4166-43c9-48ec-b694-5b6747517f2f', name: 'Onyx', description: 'Deep and authoritative voice' },
-        { id: '42f34de3-e147-4538-90e1-1302563d8b11', name: 'Nova', description: 'Warm and friendly voice' },
-        { id: 'ff1ccc45-487c-4911-9351-8a95f12ba832', name: 'Shimmer', description: 'Bright and energetic voice' }
-      ];
-      setVoices(voiceOptions);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error:', error);
-      setError('Failed to fetch voices');
-      setLoading(false);
-    }
+  // This function is used by DirectCallForm, so we need to keep it
+  // eslint-disable-next-line no-unused-vars
+  const handlePlayVoice = (voice) => {
+    setCurrentPlayingVoice(voice.id);
+    
+    audioRef.current.pause();
+    audioRef.current = new Audio(`/api/v1/voice-samples/${voice.id}`);
+    
+    audioRef.current.onended = () => {
+      setCurrentPlayingVoice(null);
+    };
+    
+    audioRef.current.onerror = () => {
+      console.error('Error playing audio sample');
+      setCurrentPlayingVoice(null);
+    };
+    
+    audioRef.current.play().catch(error => {
+      console.error('Error playing audio:', error);
+      setCurrentPlayingVoice(null);
+    });
   };
+
+  // Function to open the AI phone image in a new window
+  const openImageInNewWindow = () => {
+    window.open('https://i.imgur.com/WZNl3lS.jpg', '_blank', 'noopener,noreferrer');
+  };
+
+  if (!sessionId) {
+    return <div className="loading">Initializing session...</div>;
+  }
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>SendPhoneCall MCP Client</h1>
-        {loading && <div className="loading">Connecting to MCP server...</div>}
-        {error && <div className="error">{error}</div>}
-        {sessionId && <div className="success">Connected to MCP Server</div>}
-      </header>
-
-      {sessionId && (
-        <>
-          <nav className="tabs">
-            <button
-              className={activeTab === 'dashboard' ? 'active' : ''}
-              onClick={() => setActiveTab('dashboard')}
-            >
-              Dashboard
-            </button>
-            <button
-              className={activeTab === 'make-call' ? 'active' : ''}
-              onClick={() => setActiveTab('make-call')}
-            >
-              Make a Call
-            </button>
-          </nav>
-
-          <main>
-            {activeTab === 'dashboard' && (
-              <>
-                <CreditsManager sessionId={sessionId} />
-                <section className="voices">
-                  <h2>Available Voices</h2>
-                  <div className="voice-list">
-                    {voices.map((voice, index) => (
-                      <div key={index} className="voice-item">
-                        <h3>{voice.name}</h3>
-                        <p>{voice.description}</p>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </>
-            )}
-
-            {activeTab === 'make-call' && (
-              <DirectCallForm
-                sessionId={sessionId}
-                voices={voices}
-              />
-            )}
-          </main>
-        </>
-      )}
+    <div className="app">
+      <div className="app-header">
+        <div className="header-content">
+          <h1>SendPhoneCall MCP Client</h1>
+          <div className="connection-status">Connected to MCP Server</div>
+        </div>
+        <div className="tech-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="40" height="40">
+            {/* SVG content remains the same */}
+          </svg>
+        </div>
+      </div>
+      
+      <div className="app-container">
+        <div className="hero-section">
+          <div className="hero-content">
+            <h2>AI-Powered Phone Calls</h2>
+            <p>Use AI to make automated phone calls with natural-sounding voices. Perfect for appointments, reminders, and customer outreach.</p>
+          </div>
+          <div className="hero-image" onClick={openImageInNewWindow}>
+            <img 
+              src="https://i.imgur.com/WZNl3lS.jpg" 
+              alt="AI Phone Technology" 
+              style={{ maxWidth: '100%', borderRadius: '8px', cursor: 'pointer' }}
+              title="Click to open in new window"
+            />
+          </div>
+        </div>
+        
+        <div className="content-container">
+          <div className="left-column">
+            <DirectCallForm 
+              voices={voices} 
+              sessionId={sessionId} 
+              setCurrentPlayingVoice={setCurrentPlayingVoice}
+              currentPlayingVoice={currentPlayingVoice}
+              fetchCallHistoryRef={fetchCallHistoryRef}
+            />
+            <CallLogManager 
+              sessionId={sessionId} 
+              setFetchCallHistoryRef={setFetchCallHistoryRef}
+            />
+          </div>
+          <div className="right-column">
+            <CreditsManager sessionId={sessionId} />
+          </div>
+        </div>
+      </div>
+      
+      <footer className="app-footer">
+        <p>© 2025 SendPhoneCall MCP | Powered by Bland AI</p>
+      </footer>
     </div>
   );
 }

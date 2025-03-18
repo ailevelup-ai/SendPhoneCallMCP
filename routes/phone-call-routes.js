@@ -9,6 +9,66 @@ const { supabaseAdmin } = require('../config/supabase');
 // Get API URL from environment variables
 const AILEVELUP_API_URL = process.env.AILEVELUP_API_URL || 'https://api.ailevelup.ai';
 
+// Generate voice sample
+router.post('/voice-sample', validateApiKey, async (req, res) => {
+  try {
+    const { 
+      voice_id, 
+      text = "Hi, welcome to Send Phone Call MCP. Upgrade to premium for inbound numbers and lower per-minute rates."
+    } = req.body;
+
+    if (!voice_id) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['voice_id']
+      });
+    }
+
+    // Generate voice sample using Bland.ai API
+    const response = await fetch(`${AILEVELUP_API_URL}/v1/voices/${voice_id}/sample`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.AILEVELUP_API_KEY}`
+      },
+      body: JSON.stringify({
+        text
+      })
+    });
+
+    // Check for errors
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Bland API voice sample error:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData
+      });
+      return res.status(response.status).json({
+        error: 'Failed to generate voice sample',
+        details: errorData
+      });
+    }
+
+    // Get audio as buffer and pass it through
+    const audioBuffer = await response.arrayBuffer();
+    
+    // Set appropriate headers
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Content-Length', audioBuffer.byteLength);
+    
+    // Send the audio data
+    res.send(Buffer.from(audioBuffer));
+    
+  } catch (error) {
+    console.error('Error generating voice sample:', error);
+    res.status(500).json({
+      error: 'Failed to generate voice sample',
+      message: error.message
+    });
+  }
+});
+
 // Make a phone call
 router.post('/call', validateApiKey, async (req, res) => {
   try {
@@ -290,12 +350,12 @@ router.get('/voice-options', validateApiKey, async (req, res) => {
   try {
     // Define available voices with their details
     const voices = [
-      { id: 'nat', name: 'Nat (Male)', gender: 'male', description: 'Clear and professional' },
-      { id: 'nova', name: 'Nova (Female)', gender: 'female', description: 'Friendly and approachable' },
-      { id: 'dave', name: 'Dave (Male)', gender: 'male', description: 'Deep and authoritative' },
-      { id: 'bella', name: 'Bella (Female)', gender: 'female', description: 'Warm and empathetic' },
-      { id: 'amy', name: 'Amy (Female)', gender: 'female', description: 'Cheerful and energetic' },
-      { id: 'josh', name: 'Josh (Male)', gender: 'male', description: 'Casual and conversational' }
+      { id: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4', name: 'Alloy', gender: 'neutral', description: 'Clear and professional' },
+      { id: '7d132ef1-c295-4b87-b27b-9f12ec64246d', name: 'Echo', gender: 'neutral', description: 'Resonant and dynamic' },
+      { id: '0f4958b1-3765-46b3-8df3-9b10424ff0f2', name: 'Fable', gender: 'neutral', description: 'Engaging storyteller' },
+      { id: 'a61e4166-43c9-48ec-b694-5b6747517f2f', name: 'Onyx', gender: 'neutral', description: 'Deep and authoritative' },
+      { id: '42f34de3-e147-4538-90e1-1302563d8b11', name: 'Nova', gender: 'neutral', description: 'Warm and friendly' },
+      { id: 'ff1ccc45-487c-4911-9351-8a95f12ba832', name: 'Shimmer', gender: 'neutral', description: 'Bright and energetic' }
     ];
 
     res.json({

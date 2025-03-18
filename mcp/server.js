@@ -101,8 +101,9 @@ async function handleMcpRequest(request, sessionId) {
         break;
       
       case 'tools/execute':
-        // Check if session is initialized
-        if (!sessions.has(sessionId) || !sessions.get(sessionId).initialized) {
+        // Check if session is initialized (skip in development)
+        if (process.env.NODE_ENV !== 'development' && 
+           (!sessions.has(sessionId) || !sessions.get(sessionId).initialized)) {
           return createErrorResponse(request.id, -32000, "Session not initialized");
         }
         
@@ -112,8 +113,9 @@ async function handleMcpRequest(request, sessionId) {
         break;
       
       case 'resources/get':
-        // Check if session is initialized
-        if (!sessions.has(sessionId) || !sessions.get(sessionId).initialized) {
+        // Check if session is initialized (skip in development) 
+        if (process.env.NODE_ENV !== 'development' && 
+           (!sessions.has(sessionId) || !sessions.get(sessionId).initialized)) {
           return createErrorResponse(request.id, -32000, "Session not initialized");
         }
         
@@ -168,10 +170,33 @@ function initializeHttpRoutes(app) {
   
   const mcpRouter = express.Router();
   
+  // Apply authentication middleware only in production
+  if (process.env.NODE_ENV !== 'development') {
+    console.log('Applying MCP authentication middleware (production mode)');
+    mcpRouter.use(authenticateMcp);
+  } else {
+    console.log('Skipping MCP authentication middleware (development mode)');
+  }
+  
   // Handle JSON-RPC requests
   mcpRouter.post('/', async (req, res) => {
-    // Create or retrieve session ID
-    const sessionId = req.headers['mcp-session-id'] || uuidv4();
+    // In development mode, create a fixed session ID for easier debugging
+    const sessionId = process.env.NODE_ENV === 'development' 
+      ? (req.headers['mcp-session-id'] || 'dev-session-' + Date.now()) 
+      : (req.headers['mcp-session-id'] || uuidv4());
+    
+    // For initialize requests in development mode, always create a valid session
+    if (process.env.NODE_ENV === 'development' && req.body.method === 'initialize') {
+      console.log('Debug: Creating development session:', sessionId);
+      sessions.set(sessionId, {
+        id: sessionId,
+        clientInfo: req.body.params?.clientInfo || {},
+        capabilities: req.body.params?.capabilities || {},
+        initialized: true,
+        createdAt: new Date(),
+        lastActivity: new Date()
+      });
+    }
     
     // Handle request
     const response = await handleMcpRequest(req.body, sessionId);

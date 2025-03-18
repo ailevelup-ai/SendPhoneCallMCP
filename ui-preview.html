@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SendPhoneCall MCP Client UI Preview</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f7fa;
+    }
+    
+    .app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      background-color: #333;
+      color: white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .header-content {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .header-content h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    
+    .connection-status {
+      font-size: 0.8rem;
+      color: #4caf50;
+      margin-top: 0.25rem;
+    }
+    
+    .tech-icon {
+      width: 40px;
+      height: 40px;
+    }
+    
+    .navigation {
+      display: flex;
+      background-color: #f0f0f0;
+      border-bottom: 1px solid #ddd;
+      padding: 0 2rem;
+    }
+    
+    .nav-button {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      background: none;
+      font-size: 1rem;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      font-weight: 500;
+    }
+    
+    .nav-button.active {
+      border-bottom-color: #007bff;
+      color: #007bff;
+    }
+    
+    .app-container {
+      flex: 1;
+      padding: 2rem;
+    }
+    
+    .hero-section {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      background-color: #e9f5ff;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .hero-content {
+      flex: 1;
+    }
+    
+    .hero-content h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    
+    .hero-image {
+      width: 150px;
+    }
+    
+    .hero-image img {
+      width: 100%;
+      height: auto;
+    }
+    
+    .content-container {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2rem;
+    }
+    
+    .direct-call-form {
+      background-color: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .direct-call-form h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    
+    .form-group textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    
+    .voice-select-container {
+      margin-bottom: 1.5rem;
+    }
+    
+    .voice-options {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    
+    .voice-option {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .voice-option:hover {
+      background-color: #f5f7fa;
+    }
+    
+    .voice-option.selected {
+      border-color: #007bff;
+      background-color: #e9f5ff;
+    }
+    
+    .voice-play-button {
+      background-color: #f0f0f0;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      margin-right: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .voice-play-button.playing {
+      background-color: #007bff;
+      color: white;
+    }
+    
+    .voice-details {
+      flex: 1;
+    }
+    
+    .voice-name {
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+    
+    .voice-accent {
+      font-size: 0.8rem;
+      color: #666;
+    }
+    
+    .submit-button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .submit-button:hover {
+      background-color: #0069d9;
+    }
+    
+    .submit-button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .status-message {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 4px;
+      background-color: #f5f7fa;
+      border-left: 4px solid #ddd;
+    }
+    
+    .status-message.success {
+      border-color: #4caf50;
+      background-color: #e8f5e9;
+    }
+    
+    .status-message.error {
+      border-color: #f44336;
+      background-color: #ffebee;
+    }
+    
+    .credits-manager {
+      background-color: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .credits-manager h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    
+    .credit-balance {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.5rem;
+      background-color: #e9f5ff;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+    
+    .balance-amount {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #007bff;
+    }
+    
+    .credit-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .stat-box {
+      padding: 1rem;
+      background-color: #f5f7fa;
+      border-radius: 8px;
+      text-align: center;
+    }
+    
+    .stat-label {
+      font-size: 0.8rem;
+      color: #666;
+      margin-bottom: 0.5rem;
+    }
+    
+    .stat-value {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .add-credits-button {
+      width: 100%;
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      padding: 0.75rem;
+      font-size: 1rem;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .add-credits-button:hover {
+      background-color: #43a047;
+    }
+    
+    .app-footer {
+      background-color: #333;
+      color: white;
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="app-header">
+      <div class="header-content">
+        <h1>SendPhoneCall MCP Client</h1>
+        <div class="connection-status">Connected to MCP Server</div>
+      </div>
+      <div class="tech-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="40" height="40">
+          <!-- Phone base -->
+          <rect x="60" y="30" width="80" height="140" rx="10" fill="#333" />
+          <rect x="65" y="40" width="70" height="110" rx="5" fill="#f5f7fa" />
+          
+          <!-- Home button -->
+          <circle cx="100" cy="160" r="8" fill="#ddd" />
+          
+          <!-- AI Brain pattern on screen -->
+          <g fill="#007bff" opacity="0.8">
+            <circle cx="85" cy="70" r="3" />
+            <circle cx="100" cy="60" r="3" />
+            <circle cx="115" cy="70" r="3" />
+            <circle cx="75" cy="90" r="3" />
+            <circle cx="95" cy="85" r="3" />
+            <circle cx="120" cy="95" r="3" />
+            <circle cx="85" cy="110" r="3" />
+            <circle cx="105" cy="120" r="3" />
+            <circle cx="125" cy="110" r="3" />
+          </g>
+          
+          <!-- Connection lines -->
+          <g stroke="#007bff" stroke-width="1.5" opacity="0.6">
+            <line x1="85" y1="70" x2="100" y2="60" />
+            <line x1="100" y1="60" x2="115" y2="70" />
+            <line x1="85" y1="70" x2="75" y2="90" />
+            <line x1="85" y1="70" x2="95" y2="85" />
+            <line x1="115" y1="70" x2="120" y2="95" />
+            <line x1="75" y1="90" x2="85" y2="110" />
+            <line x1="95" y1="85" x2="105" y2="120" />
+            <line x1="120" y1="95" x2="125" y2="110" />
+            <line x1="85" y1="110" x2="105" y2="120" />
+          </g>
+          
+          <!-- Signal waves -->
+          <g stroke="#4caf50" stroke-width="2" fill="none" opacity="0.8">
+            <path d="M 40,90 Q 25,90 25,70 Q 25,50 50,50 Q 75,50 75,70 Q 75,90 60,90" />
+            <path d="M 140,90 Q 155,90 155,70 Q 155,50 130,50 Q 105,50 105,70 Q 105,90 120,90" />
+          </g>
+        </svg>
+      </div>
+    </div>
+    
+    <nav class="navigation">
+      <button class="nav-button active">Dashboard</button>
+      <button class="nav-button">Make a Call</button>
+    </nav>
+    
+    <div class="app-container">
+      <div class="hero-section">
+        <div class="hero-content">
+          <h2>AI-Powered Phone Calls</h2>
+          <p>Use AI to make automated phone calls with natural-sounding voices. Perfect for appointments, reminders, and customer outreach.</p>
+        </div>
+        <div class="hero-image">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="150" height="150">
+            <!-- Phone base -->
+            <rect x="60" y="30" width="80" height="140" rx="10" fill="#333" />
+            <rect x="65" y="40" width="70" height="110" rx="5" fill="#f5f7fa" />
+            
+            <!-- Home button -->
+            <circle cx="100" cy="160" r="8" fill="#ddd" />
+            
+            <!-- AI Brain pattern on screen -->
+            <g fill="#007bff" opacity="0.8">
+              <circle cx="85" cy="70" r="3" />
+              <circle cx="100" cy="60" r="3" />
+              <circle cx="115" cy="70" r="3" />
+              <circle cx="75" cy="90" r="3" />
+              <circle cx="95" cy="85" r="3" />
+              <circle cx="120" cy="95" r="3" />
+              <circle cx="85" cy="110" r="3" />
+              <circle cx="105" cy="120" r="3" />
+              <circle cx="125" cy="110" r="3" />
+            </g>
+            
+            <!-- Connection lines -->
+            <g stroke="#007bff" stroke-width="1.5" opacity="0.6">
+              <line x1="85" y1="70" x2="100" y2="60" />
+              <line x1="100" y1="60" x2="115" y2="70" />
+              <line x1="85" y1="70" x2="75" y2="90" />
+              <line x1="85" y1="70" x2="95" y2="85" />
+              <line x1="115" y1="70" x2="120" y2="95" />
+              <line x1="75" y1="90" x2="85" y2="110" />
+              <line x1="95" y1="85" x2="105" y2="120" />
+              <line x1="120" y1="95" x2="125" y2="110" />
+              <line x1="85" y1="110" x2="105" y2="120" />
+            </g>
+            
+            <!-- Signal waves -->
+            <g stroke="#4caf50" stroke-width="2" fill="none" opacity="0.8">
+              <path d="M 40,90 Q 25,90 25,70 Q 25,50 50,50 Q 75,50 75,70 Q 75,90 60,90" />
+              <path d="M 140,90 Q 155,90 155,70 Q 155,50 130,50 Q 105,50 105,70 Q 105,90 120,90" />
+            </g>
+          </svg>
+        </div>
+      </div>
+      
+      <div class="content-container">
+        <!-- Direct Call Form -->
+        <div class="direct-call-form">
+          <h2>Make a Direct Call</h2>
+          
+          <div class="form-group">
+            <label for="phoneNumber">Phone Number</label>
+            <input type="tel" id="phoneNumber" placeholder="+1 (555) 555-5555" />
+          </div>
+          
+          <div class="form-group">
+            <label for="task">Task Description</label>
+            <textarea id="task" placeholder="Describe what the AI should do on this call..."></textarea>
+          </div>
+          
+          <div class="voice-select-container">
+            <label>Select Voice</label>
+            <div class="voice-options">
+              <div class="voice-option selected">
+                <button class="voice-play-button">▶</button>
+                <div class="voice-details">
+                  <div class="voice-name">Alex</div>
+                  <div class="voice-accent">Male, American</div>
+                </div>
+              </div>
+              
+              <div class="voice-option">
+                <button class="voice-play-button">▶</button>
+                <div class="voice-details">
+                  <div class="voice-name">Emily</div>
+                  <div class="voice-accent">Female, American</div>
+                </div>
+              </div>
+              
+              <div class="voice-option">
+                <button class="voice-play-button">▶</button>
+                <div class="voice-details">
+                  <div class="voice-name">David</div>
+                  <div class="voice-accent">Male, British</div>
+                </div>
+              </div>
+              
+              <div class="voice-option">
+                <button class="voice-play-button playing">■</button>
+                <div class="voice-details">
+                  <div class="voice-name">Sarah</div>
+                  <div class="voice-accent">Female, British</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="model">AI Model</label>
+            <select id="model">
+              <option value="turbo">Turbo (Recommended)</option>
+              <option value="standard">Standard</option>
+            </select>
+          </div>
+          
+          <button class="submit-button">Make Call</button>
+          
+          <div class="status-message">
+            Ready to make a call.
+          </div>
+        </div>
+        
+        <!-- Credits Manager -->
+        <div class="credits-manager">
+          <h2>Credits</h2>
+          
+          <div class="credit-balance">
+            <div class="balance-label">Current Balance</div>
+            <div class="balance-amount">100.0</div>
+          </div>
+          
+          <div class="credit-stats">
+            <div class="stat-box">
+              <div class="stat-label">Total Added</div>
+              <div class="stat-value">150.0</div>
+            </div>
+            
+            <div class="stat-box">
+              <div class="stat-label">Total Used</div>
+              <div class="stat-value">50.0</div>
+            </div>
+          </div>
+          
+          <button class="add-credits-button">Add Credits</button>
+        </div>
+      </div>
+    </div>
+    
+    <footer class="app-footer">
+      <p>© 2025 SendPhoneCall MCP | Powered by Bland AI</p>
+    </footer>
+  </div>
+</body>
+</html> 

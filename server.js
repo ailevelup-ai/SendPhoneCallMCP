@@ -10,9 +10,16 @@ const routes = require('./routes');
 const { initializeDatabase } = require('./config/supabase');
 const { initializeMcpServer } = require('./mcp/server');
 
+// Import route modules
+const authRoutes = require('./routes/auth-routes');
+const auditRoutes = require('./routes/audit-routes');
+const phoneCallRoutes = require('./routes/phone-call-routes');
+const dashboardRoutes = require('./routes/dashboard-routes');
+const voiceSampleRoutes = require('./server/api/voice-sample');
+
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3040;
+const PORT = process.env.PORT || 3030;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Apply security middleware
@@ -55,8 +62,121 @@ app.use('/api/', apiLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Add bypass middleware in development mode
+if (process.env.NODE_ENV === 'development') {
+  console.log('DEVELOPMENT MODE: Creating simplified MCP endpoint');
+  
+  // These routes need to be defined BEFORE the other app.use('/api/v1') routes
+  app.options('/api/v1/mcp', (req, res) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, MCP-Session-Id');
+    res.header('Access-Control-Expose-Headers', 'MCP-Session-Id');
+    res.status(200).end();
+  });
+  
+  app.post('/api/v1/mcp', (req, res) => {
+    console.log('DEV MCP REQUEST:', req.method, req.body?.method);
+    
+    // Create a session ID
+    const sessionId = 'dev-session-' + Date.now();
+    res.setHeader('MCP-Session-Id', sessionId);
+    
+    // Process methods
+    if (req.body && req.body.method === 'initialize') {
+      return res.json({
+        jsonrpc: '2.0',
+        id: req.body.id,
+        result: {
+          sessionId,
+          server: {
+            name: "ailevelup-mcp-dev",
+            version: "1.0.0"
+          },
+          capabilities: {
+            tools: { schema: { version: "2024-11-05" } },
+            resources: { schema: { version: "2024-11-05" } }
+          }
+        }
+      });
+    }
+    
+    if (req.body && req.body.method === 'tools/execute') {
+      const toolName = req.body.params?.name || 'unknown';
+      console.log('DEV MCP TOOL REQUEST:', toolName);
+      
+      // Handle specific tool types
+      if (toolName === 'getVoiceOptions') {
+        return res.json({
+          jsonrpc: '2.0',
+          id: req.body.id,
+          result: {
+            voices: [
+              { id: "1", name: "Alex", gender: "male", accent: "American" },
+              { id: "2", name: "Emily", gender: "female", accent: "American" },
+              { id: "3", name: "David", gender: "male", accent: "British" },
+              { id: "4", name: "Sarah", gender: "female", accent: "British" }
+            ]
+          }
+        });
+      }
+      
+      if (toolName === 'getModelOptions') {
+        return res.json({
+          jsonrpc: '2.0',
+          id: req.body.id,
+          result: [
+            { id: "standard", name: "Standard", description: "Basic voice model" },
+            { id: "turbo", name: "Turbo", description: "Enhanced voice model" }
+          ]
+        });
+      }
+      
+      if (toolName === 'getCredits') {
+        return res.json({
+          jsonrpc: '2.0',
+          id: req.body.id,
+          result: {
+            balance: 100.0,
+            totalAdded: 150.0,
+            totalUsed: 50.0
+          }
+        });
+      }
+      
+      // Default response for other tools
+      return res.json({
+        jsonrpc: '2.0',
+        id: req.body.id,
+        result: {
+          success: true,
+          toolName: toolName,
+          mockData: true,
+          message: 'This is mock data for development mode'
+        }
+      });
+    }
+    
+    // Default response for other methods
+    return res.json({
+      jsonrpc: '2.0',
+      id: req.body.id || 0,
+      result: {
+        success: true,
+        devMode: true,
+        message: 'Development mode MCP endpoint'
+      }
+    });
+  });
+}
+
 // API Routes
 app.use('/api/v1', routes);
+app.use('/api/v1', authRoutes);
+app.use('/api/v1', auditRoutes);
+app.use('/api/v1', phoneCallRoutes);
+app.use('/api/v1', dashboardRoutes);
+app.use('/api', voiceSampleRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {
@@ -65,6 +185,9 @@ app.get('/health', (req, res) => {
 
 // Serve static files from the client build directory
 app.use(express.static(path.join(__dirname, 'client/build')));
+
+// Explicitly serve the images directory
+app.use('/images', express.static(path.join(__dirname, 'client/public/images')));
 
 // Handle React routing, return all requests to React app
 app.get('*', (req, res) => {

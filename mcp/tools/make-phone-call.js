@@ -25,9 +25,8 @@ const parametersSchema = {
     },
     voice: {
       type: 'string',
-      description: 'Voice to use for the call',
-      enum: ['nat', 'nova', 'dave', 'bella', 'amy', 'josh'],
-      default: 'nat'
+      description: 'Voice ID to use for the call (UUID format)',
+      default: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4' // Default to Alloy voice
     },
     fromNumber: {
       type: 'string',

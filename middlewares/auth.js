@@ -43,6 +43,13 @@ async function requireAdmin(req, res, next) {
 
 async function validateApiKey(req, res, next) {
   try {
+    // Bypass API key validation in development mode
+    if (process.env.NODE_ENV === 'development' && process.env.BYPASS_API_KEY_VALIDATION === 'true') {
+      console.log('Bypassing API key validation in development mode');
+      req.user = { id: 'test-user-id', role: 'user' };
+      return next();
+    }
+
     const apiKey = req.headers['x-api-key'];
     if (!apiKey) {
       return res.status(401).json({ error: 'No API key provided' });

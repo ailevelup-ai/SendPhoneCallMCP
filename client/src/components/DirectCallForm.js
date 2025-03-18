@@ -7,6 +7,7 @@ import axios from 'axios';
  * 
  * Provides a UI for users to directly initiate phone calls without using the MCP server.
  * Handles form validation, API calls, and displays feedback to the user.
+ * Now includes voice sample playback functionality.
  */
 const DirectCallForm = ({ onCallInitiated }) => {
   const { user } = useAuth();
@@ -16,7 +17,7 @@ const DirectCallForm = ({ onCallInitiated }) => {
     phoneNumber: '',
     task: '',
     maxDuration: 5, // Default 5 minutes
-    voice: 'nat', // Default voice
+    voice: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4', // Default voice (Alloy)
     model: 'turbo', // Default model
     temperature: 0.7, // Default temperature
     voicemailAction: 'hangup', // Default voicemail action
@@ -30,6 +31,8 @@ const DirectCallForm = ({ onCallInitiated }) => {
   const [userCredits, setUserCredits] = useState(0);
   const [availableVoices, setAvailableVoices] = useState([]);
   const [availableModels, setAvailableModels] = useState([]);
+  const [isPlayingSample, setIsPlayingSample] = useState(false);
+  const [currentPlayingVoice, setCurrentPlayingVoice] = useState(null);
   
   // Fetch available voices and models on component mount
   useEffect(() => {
@@ -43,12 +46,12 @@ const DirectCallForm = ({ onCallInitiated }) => {
         console.error('Error fetching voice options:', error);
         // Fallback to default voices
         setAvailableVoices([
-          { id: 'nat', name: 'Nat (Male)' },
-          { id: 'nova', name: 'Nova (Female)' },
-          { id: 'dave', name: 'Dave (Male)' },
-          { id: 'bella', name: 'Bella (Female)' },
-          { id: 'amy', name: 'Amy (Female)' },
-          { id: 'josh', name: 'Josh (Male)' }
+          { id: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4', name: 'Alloy', description: 'Clear and professional voice' },
+          { id: '7d132ef1-c295-4b87-b27b-9f12ec64246d', name: 'Echo', description: 'Resonant and dynamic voice' },
+          { id: '0f4958b1-3765-46b3-8df3-9b10424ff0f2', name: 'Fable', description: 'Engaging storyteller voice' },
+          { id: 'a61e4166-43c9-48ec-b694-5b6747517f2f', name: 'Onyx', description: 'Deep and authoritative voice' },
+          { id: '42f34de3-e147-4538-90e1-1302563d8b11', name: 'Nova', description: 'Warm and friendly voice' },
+          { id: 'ff1ccc45-487c-4911-9351-8a95f12ba832', name: 'Shimmer', description: 'Bright and energetic voice' }
         ]);
       }
     };
@@ -103,6 +106,43 @@ const DirectCallForm = ({ onCallInitiated }) => {
       ...prev,
       [name]: inputValue
     }));
+  };
+  
+  // Play voice sample
+  const playVoiceSample = async (voiceId) => {
+    try {
+      setIsPlayingSample(true);
+      setCurrentPlayingVoice(voiceId);
+      
+      // Sample text for demonstration
+      const sampleText = "This is a sample of how this voice will sound on your phone call.";
+      
+      // Call the API to generate and play the sample
+      const response = await axios.post('/api/v1/voice-sample', {
+        voice_id: voiceId,
+        text: sampleText
+      }, {
+        responseType: 'blob'
+      });
+      
+      // Create audio element and play the sample
+      const audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
+        setIsPlayingSample(false);
+        setCurrentPlayingVoice(null);
+        URL.revokeObjectURL(audioUrl); // Clean up
+      };
+      
+      audio.play();
+    } catch (error) {
+      console.error('Error playing voice sample:', error);
+      setIsPlayingSample(false);
+      setCurrentPlayingVoice(null);
+      setError('Failed to play voice sample. Please try again.');
+    }
   };
   
   // Handle form submission
@@ -231,21 +271,41 @@ const DirectCallForm = ({ onCallInitiated }) => {
           <small className="form-text text-muted">Maximum call duration in minutes (1-30)</small>
         </div>
         
-        <div className="form-group">
+        <div className="form-group voice-selection">
           <label htmlFor="voice">Voice</label>
-          <select
-            id="voice"
-            name="voice"
-            value={formData.voice}
-            onChange={handleInputChange}
-            className="form-control"
-          >
+          <div className="voice-samples-container">
             {availableVoices.map(voice => (
-              <option key={voice.id} value={voice.id}>
-                {voice.name}
-              </option>
+              <div 
+                key={voice.id} 
+                className={`voice-sample ${formData.voice === voice.id ? 'selected' : ''}`}
+                onClick={() => setFormData(prev => ({ ...prev, voice: voice.id }))}
+              >
+                <div className="voice-info">
+                  <input
+                    type="radio"
+                    id={`voice-${voice.id}`}
+                    name="voice"
+                    value={voice.id}
+                    checked={formData.voice === voice.id}
+                    onChange={handleInputChange}
+                  />
+                  <label htmlFor={`voice-${voice.id}`}>{voice.name}</label>
+                  <small>{voice.description}</small>
+                </div>
+                <button 
+                  type="button" 
+                  className="btn btn-sm btn-outline-primary play-sample-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playVoiceSample(voice.id);
+                  }}
+                  disabled={isPlayingSample && currentPlayingVoice === voice.id}
+                >
+                  {isPlayingSample && currentPlayingVoice === voice.id ? 'Playing...' : 'Play Sample'}
+                </button>
+              </div>
             ))}
-          </select>
+          </div>
         </div>
         
         <div className="form-group">

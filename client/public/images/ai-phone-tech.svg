@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d0e26" />
+      <stop offset="100%" stop-color="#1b102b" />
+    </linearGradient>
+    <radialGradient id="glowGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#4a00e0" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#0b074e" stop-opacity="0" />
+    </radialGradient>
+    <filter id="glow" height="300%" width="300%" x="-100%" y="-100%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="glow" />
+      <feComposite in="SourceGraphic" in2="glow" operator="over" />
+    </filter>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#bgGradient)" />
+  <ellipse cx="512" cy="512" rx="400" ry="300" fill="url(#glowGradient)" />
+  
+  <!-- AI Head/Brain -->
+  <g filter="url(#glow)" transform="translate(300, 200) scale(0.8)">
+    <path d="M180,100 C180,44.77 224.77,0 280,0 C335.23,0 380,44.77 380,100 C380,155.23 335.23,200 280,200 C224.77,200 180,155.23 180,100 Z" fill="none" stroke="#00e5ff" stroke-width="5" />
+    <path d="M230,30 L270,30 M230,50 L270,50 M230,70 L270,70 M230,90 L270,90 M230,110 L270,110 M230,130 L270,130 M230,150 L270,150" stroke="#00e5ff" stroke-width="3" />
+    <path d="M210,50 L230,50 M210,90 L230,90 M210,130 L230,130" stroke="#00e5ff" stroke-width="3" />
+    <path d="M270,50 L290,50 M270,90 L290,90 M270,130 L290,130" stroke="#00e5ff" stroke-width="3" />
+    <path d="M280,200 L280,220" stroke="#00e5ff" stroke-width="5" />
+  </g>
+  
+  <!-- AI Chip -->
+  <g filter="url(#glow)" transform="translate(462, 512) rotate(45)">
+    <rect x="-50" y="-50" width="100" height="100" fill="#2d0a54" stroke="#ff1493" stroke-width="3" />
+    <text x="0" y="10" font-family="Arial" font-size="40" text-anchor="middle" fill="#00e5ff" filter="url(#glow)">AI</text>
+    <path d="M-50,-30 L-80,-30 M-50,0 L-80,0 M-50,30 L-80,30" stroke="#ff1493" stroke-width="2" />
+    <path d="M50,-30 L80,-30 M50,0 L80,0 M50,30 L80,30" stroke="#ff1493" stroke-width="2" />
+    <path d="M-30,-50 L-30,-80 M0,-50 L0,-80 M30,-50 L30,-80" stroke="#ff1493" stroke-width="2" />
+    <path d="M-30,50 L-30,80 M0,50 L0,80 M30,50 L30,80" stroke="#ff1493" stroke-width="2" />
+  </g>
+  
+  <!-- Phone Icon -->
+  <g filter="url(#glow)" transform="translate(650, 650) scale(0.7)">
+    <rect x="-60" y="-60" width="120" height="120" rx="20" fill="#0f0a20" stroke="#00e5ff" stroke-width="5" />
+    <path d="M-20,-20 A40,40 0 0,1 20,-20 L20,20 A40,40 0 0,1 -20,20 Z" fill="none" stroke="#00e5ff" stroke-width="5" />
+  </g>
+  
+  <!-- Connection Lines -->
+  <g stroke="#ff1493" stroke-width="3" filter="url(#glow)">
+    <path d="M350,300 C400,350 400,400 462,462" />
+    <path d="M562,562 C600,600 620,620 650,650" />
+    <path d="M350,300 C300,400 300,600 400,700 C450,750 600,700 650,650" />
+  </g>
+  
+  <!-- Network Nodes -->
+  <g fill="#00e5ff" filter="url(#glow)">
+    <circle cx="350" cy="300" r="5" />
+    <circle cx="400" cy="350" r="3" />
+    <circle cx="450" cy="400" r="4" />
+    <circle cx="500" cy="550" r="3" />
+    <circle cx="550" cy="600" r="4" />
+    <circle cx="650" cy="650" r="5" />
+    <circle cx="300" cy="400" r="3" />
+    <circle cx="300" cy="500" r="4" />
+    <circle cx="300" cy="600" r="3" />
+    <circle cx="400" cy="700" r="4" />
+    <circle cx="500" cy="700" r="3" />
+    <circle cx="600" cy="700" r="5" />
+  </g>
+  
+  <!-- Wave Effect -->
+  <g stroke="#00e5ff" stroke-width="3" filter="url(#glow)" transform="translate(462, 400)">
+    <path d="M-30,0 A30,10 0 0,1 30,0" />
+    <path d="M-50,15 A50,15 0 0,1 50,15" />
+    <path d="M-70,30 A70,20 0 0,1 70,30" />
+  </g>
+</svg> 

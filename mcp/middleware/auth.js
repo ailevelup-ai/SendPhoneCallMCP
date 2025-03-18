@@ -15,8 +15,17 @@ const { supabase } = require('../../config/supabase');
  */
 async function authenticateMcp(req, res, next) {
   // In development mode, allow testing without authentication
-  if (process.env.NODE_ENV === 'development' && process.env.BYPASS_MCP_AUTH === 'true') {
-    logger.warn('MCP authentication bypassed in development mode');
+  const bypassAuth = process.env.BYPASS_MCP_AUTH === 'true' || 
+                     process.env.BYPASS_MCP_AUTH === true || 
+                     process.env.BYPASS_MCP_AUTH === '1' ||
+                     process.env.BYPASS_MCP_AUTH === 1;
+                   
+  console.log('BYPASS_MCP_AUTH value:', process.env.BYPASS_MCP_AUTH, 'type:', typeof process.env.BYPASS_MCP_AUTH);
+  console.log('Should bypass auth?', bypassAuth);
+  
+  if (process.env.NODE_ENV === 'development' && bypassAuth) {
+    console.log('MCP authentication bypassed in development mode');
+    logger.info('MCP authentication bypassed in development mode');
     req.userId = 'dev-user-id';
     req.user = {
       id: 'dev-user-id',
