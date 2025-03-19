@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
+import Login from './Login';
 
 // eslint-disable-next-line
 function VoiceItem({ voice, onPlay, isPlaying }) {
@@ -94,14 +95,16 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
     const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
     
     setStatus('Initiating call...');
+    setIsSubmitting(true);
     
     try {
+      // Get the token from localStorage
+      const token = localStorage.getItem('token');
+      
       // Use the auth headers that worked for initialization
       const headers = {
-        ...(window.authHeaders || {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ailevelup-mcp'
-        }),
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : 'Bearer ailevelup-mcp',
         'MCP-Session-Id': sessionId
       };
       
@@ -150,6 +153,8 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
     } catch (error) {
       console.error('Error making call:', error);
       setStatus(`Error: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -299,35 +304,29 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
 function CreditsManager({ sessionId }) {
   const [credits, setCredits] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showStripeForm, setShowStripeForm] = useState(false);
+  const [error, setError] = useState('');
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [customAmount, setCustomAmount] = useState('');
+  const [customAmount, setCustomAmount] = useState(10);
+  const [showCustomAmount, setShowCustomAmount] = useState(false);
 
   const fetchCredits = async () => {
-    if (!sessionId) return;
-    
     setLoading(true);
     try {
-      // Use the auth headers that worked for initialization
-      const headers = {
-        ...(window.authHeaders || {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ailevelup-mcp'
-        }),
-        'MCP-Session-Id': sessionId
-      };
+      const token = localStorage.getItem('token');
       
       const response = await fetch('/api/v1/mcp', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : 'Bearer ailevelup-mcp',
+          'MCP-Session-Id': sessionId
+        },
         body: JSON.stringify({
           jsonrpc: '2.0',
-          id: 3,
+          id: 5,
           method: 'tools/execute',
           params: {
-            name: 'getCredits',
-            arguments: {}
+            name: 'getCredits'
           }
         })
       });
@@ -335,11 +334,9 @@ function CreditsManager({ sessionId }) {
       const data = await response.json();
       
       if (data.result) {
-        // Handle both possible response structures
         setCredits(data.result);
-        setError(null);
-      } else {
-        setError(data.error ? data.error.message : 'Failed to fetch credits');
+      } else if (data.error) {
+        setError(`Failed to fetch credits: ${data.error.message}`);
       }
     } catch (error) {
       console.error('Error fetching credits:', error);
@@ -431,7 +428,7 @@ function CreditsManager({ sessionId }) {
   // Handle opening Stripe checkout for one-time purchases
   const handlePurchaseCredits = (plan) => {
     setSelectedPlan(plan);
-    setShowStripeForm(true);
+    setShowCustomAmount(true);
     // In a real implementation, you'd redirect to a Stripe checkout page or open a Stripe modal
     console.log(`Opening Stripe checkout for ${plan.name} plan at $${plan.price}`);
     
@@ -442,7 +439,7 @@ function CreditsManager({ sessionId }) {
   // Handle opening Stripe checkout for subscriptions
   const handleSubscribe = (plan) => {
     setSelectedPlan(plan);
-    setShowStripeForm(true);
+    setShowCustomAmount(true);
     // In a real implementation, you'd redirect to a Stripe checkout page or open a Stripe modal
     console.log(`Opening Stripe subscription checkout for ${plan.name} plan at $${plan.price}/month`);
     
@@ -476,7 +473,7 @@ function CreditsManager({ sessionId }) {
       <div className="button-row">
         <button 
           className="cancel-button" 
-          onClick={() => setShowStripeForm(false)}
+          onClick={() => setShowCustomAmount(false)}
         >
           Cancel
         </button>
@@ -484,7 +481,7 @@ function CreditsManager({ sessionId }) {
           className="pay-button"
           onClick={() => {
             alert(`Payment of $${selectedPlan.price.toFixed(2)} processed! Credits will be added shortly.`);
-            setShowStripeForm(false);
+            setShowCustomAmount(false);
             // In a real app, you'd process the payment through Stripe
           }}
         >
@@ -501,7 +498,7 @@ function CreditsManager({ sessionId }) {
         <p>Loading credits...</p>
       ) : error ? (
         <div className="error-message">{error}</div>
-      ) : showStripeForm ? (
+      ) : showCustomAmount ? (
         <StripeForm />
       ) : (
         <>
@@ -595,47 +592,54 @@ function CreditsManager({ sessionId }) {
 function CallLogManager({ sessionId, setFetchCallHistoryRef }) {
   const [callHistory, setCallHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Function to fetch call history - wrap in useCallback to prevent dependency issues
-  const fetchCallHistory = useCallback(async () => {
+  const [error, setError] = useState(null);
+
+  // Function to fetch the call history
+  const fetchCallHistory = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      // Use the auth headers that worked for initialization
-      const headers = {
-        ...(window.authHeaders || {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ailevelup-mcp'
-        }),
-        'MCP-Session-Id': sessionId
-      };
+      const token = localStorage.getItem('token');
       
       const response = await fetch('/api/v1/mcp', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : 'Bearer ailevelup-mcp',
+          'MCP-Session-Id': sessionId
+        },
         body: JSON.stringify({
           jsonrpc: '2.0',
-          id: 5,
+          id: 6,
           method: 'tools/execute',
           params: {
             name: 'getCallHistory',
-            arguments: {}
+            arguments: {
+              limit: 10
+            }
           }
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
       const data = await response.json();
       
-      if (data.result && data.result.calls) {
+      if (data.error) {
+        setError(`Error fetching call history: ${data.error.message}`);
+      } else if (data.result && Array.isArray(data.result.calls)) {
         setCallHistory(data.result.calls);
       } else {
-        console.error('Failed to fetch call history:', data.error);
+        setCallHistory([]);
       }
     } catch (error) {
       console.error('Error fetching call history:', error);
+      setError(`Failed to load call history: ${error.message}`);
     } finally {
       setLoading(false);
     }
-  }, [sessionId]);
+  };
   
   // Set the fetchCallHistory function in the parent
   useEffect(() => {
@@ -707,109 +711,161 @@ function CallLogManager({ sessionId, setFetchCallHistoryRef }) {
 }
 
 function App() {
-  const [sessionId, setSessionId] = useState(null);
+  const [sessionId, setSessionId] = useState('');
   const [voices, setVoices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [currentPlayingVoice, setCurrentPlayingVoice] = useState(null);
-  const audioRef = useRef(new Audio());
   const fetchCallHistoryRef = useRef(null);
+  
+  // Add authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  
+  // Check if user is already logged in (token in localStorage)
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    const userEmail = localStorage.getItem('userEmail');
+    const userRole = localStorage.getItem('userRole');
+    
+    if (token && userId) {
+      setIsAuthenticated(true);
+      setUser({
+        id: userId,
+        email: userEmail,
+        role: userRole,
+        token
+      });
+    }
+  }, []);
+  
+  // Separate useEffect for initialization after authentication
+  useEffect(() => {
+    if (isAuthenticated) {
+      initializeSession();
+    }
+  }, [isAuthenticated]);
 
-  // Set the fetchCallHistory reference function
   const setFetchCallHistoryRef = (fetchFn) => {
     fetchCallHistoryRef.current = fetchFn;
   };
-
-  useEffect(() => {
-    // Initialize session with proper authentication
+  
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userRole');
+    
+    // Reset state
+    setIsAuthenticated(false);
+    setUser(null);
+    setSessionId('');
+    setVoices([]);
+  };
+  
+  const handleLoginSuccess = (userData) => {
+    // Set authentication state
+    setIsAuthenticated(true);
+    setUser(userData);
+    
+    // Initialize the session
     initializeSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
 
   const initializeSession = async () => {
+    setLoading(true);
+    setError('');
+    
     try {
-      console.log('Initializing MCP session...');
+      const token = localStorage.getItem('token');
       
-      let authHeaders = {
-        'Content-Type': 'application/json'
+      // Set up auth headers
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : 'Bearer ailevelup-mcp'
       };
       
-      console.log('Attempting MCP connection...');
-      try {
-        const response = await fetch('/api/v1/mcp', {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'initialize',
-            params: {
-              clientInfo: {
-                name: 'bland-ai-web-client',
-                version: '1.0.0'
-              }
-            }
-          })
-        });
-
-        console.log('MCP Response Status:', response.status);
-        
+      // Store auth headers globally for reuse
+      window.authHeaders = authHeaders;
+      
+      console.log('Initializing MCP session...');
+      
+      const response = await fetch('/api/v1/mcp', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {}
+        })
+      });
+      
+      if (response.ok) {
         const data = await response.json();
-        console.log('Session initialization response:', data);
+        console.log('MCP initialization response:', data);
         
-        if (data.result && data.result.sessionId) {
+        if (data.result) {
           const sid = data.result.sessionId;
           setSessionId(sid);
           
-          // Store auth headers for future requests
-          window.authHeaders = authHeaders;
-          
-          // After session is initialized, fetch voices
+          // Fetch voices after session initialization
           fetchVoices(sid, authHeaders);
-        } else {
-          console.error('Failed to initialize session:', data.error || 'No session ID returned');
-          throw new Error(data.error?.message || 'Failed to initialize session');
+        } else if (data.error) {
+          console.error('MCP initialization error:', data.error);
+          setError(`Initialization error: ${data.error.message || JSON.stringify(data.error)}`);
+          setLoading(false);
         }
-      } catch (error) {
-        console.error('Error during fetch:', error);
-        throw error; // Re-throw to be caught by outer try/catch
+      } else {
+        console.error('Failed to initialize MCP session:', response.status, response.statusText);
+        setError(`Failed to initialize: ${response.status} ${response.statusText}`);
+        setLoading(false);
       }
     } catch (error) {
-      console.error('Error initializing session:', error);
-      // Don't alert here, just log the error
-      // The app will show "Initializing session..." which is better than an alert
+      console.error('Error initializing MCP session:', error);
+      setError(`Error initializing session: ${error.message}`);
+      setLoading(false);
     }
   };
 
   const fetchVoices = async (sid, authHeaders) => {
     try {
-      // Use the same auth headers that worked for initialization
-      const headers = {
-        ...authHeaders,
-        'MCP-Session-Id': sid
-      };
+      console.log('Fetching available voices...');
       
       const response = await fetch('/api/v1/mcp', {
         method: 'POST',
-        headers,
+        headers: {
+          ...authHeaders,
+          'MCP-Session-Id': sid
+        },
         body: JSON.stringify({
           jsonrpc: '2.0',
           id: 2,
           method: 'tools/execute',
           params: {
-            name: 'getVoiceOptions',
-            arguments: {}
+            name: 'getVoiceOptions'
           }
         })
       });
-
-      const data = await response.json();
       
-      if (data.result && data.result.voices) {
-        setVoices(data.result.voices);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Voices response:', data);
+        
+        if (data.result && data.result.voices) {
+          setVoices(data.result.voices);
+        } else if (data.error) {
+          console.error('Error fetching voices:', data.error);
+        }
       } else {
-        console.error('No voices found:', data.error);
+        console.error('Failed to fetch voices:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error fetching voices:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -847,57 +903,54 @@ function App() {
 
   return (
     <div className="app">
-      <div className="app-header">
-        <div className="header-content">
-          <h1>SendPhoneCall MCP Client</h1>
-          <div className="connection-status">Connected to MCP Server</div>
-        </div>
-        <div className="tech-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="40" height="40">
-            {/* SVG content */}
-          </svg>
-        </div>
-      </div>
-      
-      <div className="app-container">
-        <div className="hero-section">
-          <div className="hero-content">
-            <h2>AI-Powered Phone Calls</h2>
-            <p>Use AI to make automated phone calls with natural-sounding voices. Perfect for appointments, reminders, and customer outreach.</p>
-          </div>
-          <div className="hero-image" onClick={openImageInNewWindow}>
-            <img 
-              src="https://ailevelup.ai/wp-content/uploads/2025/03/SendMCPPhoneCallSplash.jpeg" 
-              alt="AI Phone Technology" 
-              style={{maxWidth: "100%", borderRadius: "8px", cursor: "pointer"}}
-              title="Click to open in new window"
-            />
-          </div>
-        </div>
-        
-        <div className="content-container">
-          <div className="left-column">
-            <DirectCallForm 
-              voices={voices} 
-              sessionId={sessionId} 
-              setCurrentPlayingVoice={setCurrentPlayingVoice}
-              currentPlayingVoice={currentPlayingVoice}
-              fetchCallHistoryRef={fetchCallHistoryRef}
-            />
-            <CallLogManager 
-              sessionId={sessionId} 
-              setFetchCallHistoryRef={setFetchCallHistoryRef}
-            />
-          </div>
-          <div className="right-column">
-            <CreditsManager sessionId={sessionId} />
-          </div>
-        </div>
-      </div>
-      
-      <footer className="app-footer">
-        <p>&copy; 2025 SendPhoneCall MCP | Powered by Bland AI</p>
-      </footer>
+      {!isAuthenticated ? (
+        <Login onLoginSuccess={handleLoginSuccess} />
+      ) : (
+        <>
+          <header className="app-header">
+            <div className="logo-container">
+              <h1>Phone Call MCP</h1>
+            </div>
+            {user && (
+              <div className="user-info">
+                <span>{user.email}</span>
+                <button className="logout-button" onClick={handleLogout}>Logout</button>
+              </div>
+            )}
+          </header>
+          
+          <main className="app-content">
+            {loading ? (
+              <div className="loading">Initializing MCP service...</div>
+            ) : error ? (
+              <div className="error-message">{error}</div>
+            ) : (
+              <div className="content-wrapper">
+                <div className="left-panel">
+                  <DirectCallForm 
+                    voices={voices} 
+                    sessionId={sessionId}
+                    setCurrentPlayingVoice={setCurrentPlayingVoice}
+                    currentPlayingVoice={currentPlayingVoice}
+                    fetchCallHistoryRef={fetchCallHistoryRef}
+                  />
+                  <CreditsManager sessionId={sessionId} />
+                </div>
+                <div className="right-panel">
+                  <CallLogManager 
+                    sessionId={sessionId} 
+                    setFetchCallHistoryRef={setFetchCallHistoryRef} 
+                  />
+                </div>
+              </div>
+            )}
+          </main>
+          
+          <footer className="app-footer">
+            <p>&copy; 2025 Phone Call MCP. All rights reserved.</p>
+          </footer>
+        </>
+      )}
     </div>
   );
 }
