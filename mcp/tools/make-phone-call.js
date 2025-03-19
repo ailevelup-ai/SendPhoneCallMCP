@@ -148,32 +148,90 @@ async function execute(params, context) {
     requestBody.webhook_url = params.webhookUrl;
   }
   
-  logger.info('Making call to ailevelup.AI', {
+  logger.info('Making call request', {
     sessionId,
     userId,
     phoneNumber: params.phoneNumber,
-    voice: params.voice
+    voice: params.voice,
+    environment: process.env.NODE_ENV
   });
   
   try {
-    // Call ailevelup.AI API
-    const response = await axios.post(
-      'https://api.bland.ai/v1/calls',
-      requestBody,
-      {
-        headers: {
-          'Authorization': `Bearer ${ailevelupApiKey}`,
-          'Content-Type': 'application/json',
-          'X-Encrypted-Key': encryptedKey
-        }
-      }
-    );
+    let responseData;
     
-    const responseData = response.data;
+    // Use AWS Lambda in production mode
+    if (process.env.NODE_ENV === 'production') {
+      const AWS = require('aws-sdk');
+      const lambda = new AWS.Lambda({
+        region: process.env.AWS_REGION || 'us-east-1',
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+      });
+      
+      logger.info('Invoking Lambda function', {
+        function: process.env.AWS_LAMBDA_FUNCTION || 'ailevelup-phone-call-mcp-production-make-call',
+        region: process.env.AWS_REGION || 'us-east-1'
+      });
+      
+      const lambdaParams = {
+        FunctionName: process.env.AWS_LAMBDA_FUNCTION || 'ailevelup-phone-call-mcp-production-make-call',
+        InvocationType: 'RequestResponse',
+        Payload: JSON.stringify({
+          phoneNumber: params.phoneNumber,
+          task: params.task,
+          voice: params.voice,
+          fromNumber: params.fromNumber || defaultFromNumber,
+          maxDuration: params.maxDuration || 300,
+          temperature: params.temperature || 1,
+          model: 'turbo',
+          voicemailAction: params.voicemailAction || 'hangup',
+          answeredByEnabled: params.answeredByEnabled !== undefined ? params.answeredByEnabled : true,
+          webhookUrl: params.webhookUrl
+        })
+      };
+      
+      const lambdaResponse = await lambda.invoke(lambdaParams).promise();
+      
+      // Check if the Lambda execution was successful
+      if (lambdaResponse.FunctionError) {
+        logger.error('Lambda execution failed', {
+          error: lambdaResponse.FunctionError,
+          payload: lambdaResponse.Payload
+        });
+        throw new Error(`Lambda execution failed: ${lambdaResponse.Payload}`);
+      }
+      
+      // Parse the Lambda response payload
+      responseData = JSON.parse(lambdaResponse.Payload);
+      
+      if (responseData.statusCode !== 200) {
+        throw new Error(responseData.body ? JSON.parse(responseData.body).message : 'Failed to make call');
+      }
+      
+      // Extract the actual response body
+      if (responseData.body && typeof responseData.body === 'string') {
+        responseData = JSON.parse(responseData.body);
+      }
+    } else {
+      // Development mode - call ailevelup.AI API directly
+      const response = await axios.post(
+        'https://api.bland.ai/v1/calls',
+        requestBody,
+        {
+          headers: {
+            'Authorization': `Bearer ${ailevelupApiKey}`,
+            'Content-Type': 'application/json',
+            'X-Encrypted-Key': encryptedKey
+          }
+        }
+      );
+      
+      responseData = response.data;
+    }
     
     // Check for error response
     if (responseData.status === 'error') {
-      logger.error('ailevelup.AI API error', {
+      logger.error('API error', {
         sessionId,
         userId,
         error: responseData.message

@@ -26,6 +26,7 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
   const [temperature, setTemperature] = useState(1);
   const [maxDuration, setMaxDuration] = useState(300);
   const [phoneNumberError, setPhoneNumberError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Update selected voice when voices are loaded
   useEffect(() => {
@@ -34,61 +35,49 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
     }
   }, [voices, selectedVoice]);
 
-  // Function to format phone number into E.164 format
+  // Phone number formatting and validation functions
   const formatToE164 = (input) => {
-    // Remove all non-numeric characters
-    const digitsOnly = input.replace(/\D/g, '');
+    // Remove all non-digit characters
+    let digits = input.replace(/\D/g, '');
     
-    // Handle US numbers without country code (assuming US if no country code provided)
-    if (digitsOnly.length === 10) {
-      return `+1${digitsOnly}`;
+    // Check if we need to add the country code (assume US +1 if not present)
+    if (digits.length === 10) {
+      // US number without country code
+      digits = '1' + digits;
     }
     
-    // If it starts with 1 and is 11 digits, assume it's a US number
-    if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
-      return `+${digitsOnly}`;
+    // Only add the plus sign if we have digits
+    if (digits) {
+      return '+' + digits;
     }
     
-    // If it already has a + sign, preserve it
-    if (input.includes('+')) {
-      return `+${digitsOnly}`;
-    }
-    
-    // For international numbers without + prefix, add it
-    if (digitsOnly.length > 10) {
-      return `+${digitsOnly}`;
-    }
-    
-    // Return as is if we can't determine the format
-    return input;
-  };
-
-  const validatePhoneNumber = (value) => {
-    // Check if phone number matches E.164 format: +[country code][number]
-    const e164Regex = /^\+[1-9]\d{1,14}$/;
-    if (!e164Regex.test(value)) {
-      setPhoneNumberError('Phone number must be in E.164 format (e.g., +12125551234)');
-      return false;
-    }
-    setPhoneNumberError('');
-    return true;
+    return '';
   };
 
   const handlePhoneNumberChange = (e) => {
-    const value = e.target.value;
-    setPhoneNumber(value);
-    if (value) {
-      validatePhoneNumber(value);
-    } else {
+    const input = e.target.value;
+    setPhoneNumber(input);
+    
+    // Clear any previous errors
+    if (phoneNumberError) {
       setPhoneNumberError('');
     }
   };
 
   const handlePhoneNumberBlur = () => {
-    if (phoneNumber) {
-      const formatted = formatToE164(phoneNumber);
-      setPhoneNumber(formatted);
-      validatePhoneNumber(formatted);
+    if (!phoneNumber) {
+      setPhoneNumberError('Phone number is required');
+      return;
+    }
+    
+    // Format to E.164 on blur
+    const formattedNumber = formatToE164(phoneNumber);
+    setPhoneNumber(formattedNumber);
+    
+    // Validate the formatted number
+    const e164Regex = /^\+[1-9]\d{10,14}$/;
+    if (!e164Regex.test(formattedNumber)) {
+      setPhoneNumberError('Please enter a valid phone number');
     }
   };
 
@@ -313,6 +302,7 @@ function CreditsManager({ sessionId }) {
   const [error, setError] = useState(null);
   const [showStripeForm, setShowStripeForm] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [customAmount, setCustomAmount] = useState('');
 
   const fetchCredits = async () => {
     if (!sessionId) return;
@@ -383,19 +373,60 @@ function CreditsManager({ sessionId }) {
     return '0.00';
   };
 
-  // Credit purchase plans
+  // Updated credit purchase plans
   const creditPlans = [
-    { id: 'credits_10', name: '10 Credits', price: 5.00, credits: 10 },
-    { id: 'credits_50', name: '50 Credits', price: 20.00, credits: 50 },
-    { id: 'credits_100', name: '100 Credits', price: 35.00, credits: 100 },
+    { id: 'credits_25', name: '25 Credits', price: 5.00, credits: 25 },
+    { id: 'credits_100', name: '100 Credits', price: 20.00, credits: 100 },
+    { id: 'credits_300', name: '300 Credits', price: 50.00, credits: 300 },
+    { id: 'credits_1000', name: '1000 Credits', price: 100.00, credits: 1000 },
   ];
 
-  // Subscription plans
+  // Updated subscription plans
   const subscriptionPlans = [
-    { id: 'sub_basic', name: 'Basic Monthly', price: 19.99, creditsPerMonth: 50 },
-    { id: 'sub_pro', name: 'Pro Monthly', price: 49.99, creditsPerMonth: 150 },
-    { id: 'sub_enterprise', name: 'Enterprise Monthly', price: 99.99, creditsPerMonth: 350 }
+    { id: 'sub_standard', name: 'Standard Monthly', price: 19.99, creditsPerMonth: 110 },
+    { id: 'sub_pro', name: 'Pro Monthly', price: 49.99, creditsPerMonth: 420 },
+    { id: 'sub_enterprise', name: 'Enterprise Monthly', price: 199.99, creditsPerMonth: 1200 }
   ];
+
+  // Handle custom amount input
+  const handleCustomAmountChange = (e) => {
+    const value = e.target.value;
+    // Only allow numbers and decimal point
+    if (value === '' || /^\d+(\.\d{0,2})?$/.test(value)) {
+      setCustomAmount(value);
+    }
+  };
+
+  // Calculate credits from custom amount (10c per minute)
+  const calculateCustomCredits = () => {
+    if (!customAmount || isNaN(parseFloat(customAmount))) return 0;
+    const amount = parseFloat(customAmount);
+    return Math.floor(amount * 10); // 10 credits per dollar
+  };
+
+  // Handle custom amount purchase
+  const handleCustomPurchase = () => {
+    const amount = parseFloat(customAmount);
+    if (isNaN(amount) || amount <= 100) {
+      alert('Custom amount must be greater than $100');
+      return;
+    }
+    
+    const credits = calculateCustomCredits();
+    if (credits > 1000000) {
+      alert('Maximum 1 million credits allowed');
+      return;
+    }
+    
+    const customPlan = {
+      id: 'custom_credits',
+      name: `${credits} Credits`,
+      price: amount,
+      credits: credits
+    };
+    
+    handlePurchaseCredits(customPlan);
+  };
 
   // Handle opening Stripe checkout for one-time purchases
   const handlePurchaseCredits = (plan) => {
@@ -498,10 +529,11 @@ function CreditsManager({ sessionId }) {
           
           <div className="purchase-section">
             <h3>Purchase Credits</h3>
+            <p className="pricing-info">1 credit = 1 minute of call time</p>
             <div className="plan-options">
               {creditPlans.map(plan => (
                 <div key={plan.id} className="plan-card">
-                  <div className="plan-name">{plan.name}</div>
+                  <div className="plan-name">{plan.credits} Credits</div>
                   <div className="plan-price">${plan.price.toFixed(2)}</div>
                   <button 
                     className="purchase-button"
@@ -511,6 +543,28 @@ function CreditsManager({ sessionId }) {
                   </button>
                 </div>
               ))}
+            </div>
+            
+            <div className="custom-purchase">
+              <h4>Need more credits?</h4>
+              <p>For orders over $100: 10¢ per minute (maximum 1 million minutes)</p>
+              <div className="custom-input-group">
+                <span className="currency-symbol">$</span>
+                <input 
+                  type="text" 
+                  value={customAmount} 
+                  onChange={handleCustomAmountChange}
+                  placeholder="Enter amount (more than $100)"
+                  className="custom-amount-input"
+                />
+                <button 
+                  className="purchase-button"
+                  onClick={handleCustomPurchase}
+                  disabled={!customAmount || parseFloat(customAmount) <= 100}
+                >
+                  Get {calculateCustomCredits()} Credits
+                </button>
+              </div>
             </div>
           </div>
           
@@ -782,9 +836,9 @@ function App() {
     });
   };
 
-  // Function to open the AI phone image in a new window
+  // Replace this function to use the new image
   const openImageInNewWindow = () => {
-    window.open('https://i.imgur.com/WZNl3lS.jpg', '_blank', 'noopener,noreferrer');
+    window.open("https://ailevelup.ai/wp-content/uploads/2025/03/SendMCPPhoneCallSplash.jpeg", "_blank", "noopener,noreferrer");
   };
 
   if (!sessionId) {
@@ -800,7 +854,7 @@ function App() {
         </div>
         <div className="tech-icon">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="40" height="40">
-            {/* SVG content remains the same */}
+            {/* SVG content */}
           </svg>
         </div>
       </div>
@@ -813,9 +867,9 @@ function App() {
           </div>
           <div className="hero-image" onClick={openImageInNewWindow}>
             <img 
-              src="https://i.imgur.com/WZNl3lS.jpg" 
+              src="https://ailevelup.ai/wp-content/uploads/2025/03/SendMCPPhoneCallSplash.jpeg" 
               alt="AI Phone Technology" 
-              style={{ maxWidth: '100%', borderRadius: '8px', cursor: 'pointer' }}
+              style={{maxWidth: "100%", borderRadius: "8px", cursor: "pointer"}}
               title="Click to open in new window"
             />
           </div>
@@ -842,7 +896,7 @@ function App() {
       </div>
       
       <footer className="app-footer">
-        <p>© 2025 SendPhoneCall MCP | Powered by Bland AI</p>
+        <p>&copy; 2025 SendPhoneCall MCP | Powered by Bland AI</p>
       </footer>
     </div>
   );
