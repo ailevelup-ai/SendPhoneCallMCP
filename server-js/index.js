@@ -273,9 +273,23 @@ app.post('/api/v1/mcp', async (req, res) => {
           });
         }
         
-        // Create a new call
+        // Create a new call ID
         const callId = uuidv4();
         const callTime = new Date();
+        
+        // Get API key for Bland.AI
+        const apiKey = process.env.AILEVELUP_ENTERPRISE_KEY || process.env.AILEVELUP_API_KEY || process.env.BLAND_API_KEY;
+        
+        if (!apiKey) {
+          return res.status(500).json({
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: -32000,
+              message: 'API key not configured'
+            }
+          });
+        }
         
         // Create the call object
         const newCall = {
@@ -305,13 +319,81 @@ app.post('/api/v1/mcp', async (req, res) => {
         sessionCredits.lastUpdated = callTime.toISOString();
         await saveCredits();
         
+        // Make the actual call to Bland AI
+        let blandCallId = null;
+        
+        try {
+          console.log('Making API call to Bland.AI for phone number', phoneNumber);
+          
+          const requestBody = {
+            phone_number: phoneNumber,
+            task: task,
+            voice: voiceId,
+            max_duration: maxDuration,
+            temperature: temperature,
+            model: 'turbo'
+          };
+          
+          // Add webhook URL if provided
+          if (webhookUrl) {
+            requestBody.webhook = webhookUrl;
+          }
+          
+          const response = await axios.post('https://api.bland.ai/v1/calls', 
+            requestBody,
+            {
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          
+          console.log('Bland API response:', response.data);
+          
+          if (response.data && response.data.status === 'success') {
+            blandCallId = response.data.call_id;
+            
+            // Update the call record with the Bland call ID
+            const callToUpdate = calls.find(c => c.id === callId);
+            if (callToUpdate) {
+              callToUpdate.bland_call_id = blandCallId;
+              callToUpdate.status = 'in-progress';
+              callToUpdate.updated_at = new Date().toISOString();
+              await saveCalls();
+            }
+          } else {
+            console.error('Bland API returned an error:', response.data);
+            
+            // Update call record to failed
+            const callToUpdate = calls.find(c => c.id === callId);
+            if (callToUpdate) {
+              callToUpdate.status = 'failed';
+              callToUpdate.error = response.data.message || 'Unknown error';
+              callToUpdate.updated_at = new Date().toISOString();
+              await saveCalls();
+            }
+          }
+        } catch (error) {
+          console.error('Error making Bland API call:', error.message);
+          
+          // Update call record to failed
+          const callToUpdate = calls.find(c => c.id === callId);
+          if (callToUpdate) {
+            callToUpdate.status = 'failed';
+            callToUpdate.error = error.message;
+            callToUpdate.updated_at = new Date().toISOString();
+            await saveCalls();
+          }
+        }
+        
         return res.json({
           jsonrpc: '2.0',
           id,
           result: {
-            callId,
-            status: 'initiated',
-            message: 'Call initiated successfully'
+            callId: blandCallId || callId,
+            status: blandCallId ? 'in-progress' : 'failed',
+            message: blandCallId ? 'Call initiated successfully' : 'Failed to initiate call'
           }
         });
       }
