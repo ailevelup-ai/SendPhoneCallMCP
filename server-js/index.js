@@ -246,145 +246,72 @@ app.post('/api/v1/mcp', async (req, res) => {
       
       // Handle makePhoneCall
       if (name === 'makePhoneCall') {
-        const { phoneNumber, task, voice: voiceId, maxDuration = 300, temperature = 1 } = args;
+        const { phoneNumber, task, voice: voiceId, maxDuration = 300, temperature = 1, webhookUrl } = args;
         
-        // Validate phone number format
-        if (!phoneNumber.startsWith('+')) {
+        // Validate required parameters
+        if (!phoneNumber || !task) {
           return res.status(400).json({
             jsonrpc: '2.0',
             id,
             error: {
               code: -32602,
-              message: "Phone number must be in E.164 format (e.g., +12125551234)"
+              message: 'Invalid parameters: phoneNumber and task are required'
             }
           });
         }
         
-        // Check credits
+        // Check if user has enough credits
         const sessionCredits = credits.get(sessionId);
-        if (!sessionCredits || sessionCredits.balance < 1) {
-          return res.status(402).json({
+        if (!sessionCredits || sessionCredits.balance <= 0) {
+          return res.status(400).json({
             jsonrpc: '2.0',
             id,
             error: {
-              code: -32602,
-              message: "Insufficient credits to make this call"
+              code: -32000,
+              message: 'Insufficient credits'
             }
           });
         }
         
-        // Generate a call ID
+        // Create a new call
         const callId = uuidv4();
+        const callTime = new Date();
         
-        // Create a call record
-        const call = {
+        // Create the call object
+        const newCall = {
           id: callId,
           session_id: sessionId,
           phone_number: phoneNumber,
           task,
-          voice_id: voiceId,
+          voice: voiceId,
           max_duration: maxDuration,
           temperature,
-          status: 'in-progress',
+          webhook_url: webhookUrl || '',
+          status: 'initiated',
           duration: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: callTime.toISOString(),
+          updated_at: callTime.toISOString()
         };
         
         // Add to calls array
-        calls.unshift(call);
+        calls.push(newCall);
+        
+        // Save to file
         await saveCalls();
         
-        // Deduct credit
+        // Deduct credits (mock)
         sessionCredits.balance -= 1;
         sessionCredits.totalUsed += 1;
-        sessionCredits.lastUpdated = new Date().toISOString();
+        sessionCredits.lastUpdated = callTime.toISOString();
         await saveCredits();
-        
-        // If we have a Bland API key, actually make the call
-        const apiKey = process.env.AILEVELUP_ENTERPRISE_KEY || process.env.AILEVELUP_API_KEY || process.env.BLAND_API_KEY;
-        
-        if (apiKey) {
-          try {
-            // Make the actual call to Bland AI
-            const response = await axios.post('https://api.bland.ai/v1/calls', {
-              phone_number: phoneNumber,
-              task,
-              voice_id: voiceId,
-              reduce_latency: true,
-              max_duration: maxDuration,
-              temperature,
-              model: 'turbo',
-              metadata: {
-                call_id: callId,
-                session_id: sessionId
-              }
-            }, {
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            console.log('Bland API call response:', response.data);
-            
-            // Set up a job to check the call status later
-            setTimeout(async () => {
-              try {
-                // Simulate call completion after a random time
-                const status = Math.random() > 0.3 ? 'completed' : 'failed';
-                const duration = Math.floor(Math.random() * 180) + 20;
-                
-                // Update the call status
-                const callToUpdate = calls.find(c => c.id === callId);
-                if (callToUpdate) {
-                  callToUpdate.status = status;
-                  callToUpdate.duration = duration;
-                  callToUpdate.updated_at = new Date().toISOString();
-                  await saveCalls();
-                }
-              } catch (err) {
-                console.error(`Error updating call status for ${callId}:`, err);
-              }
-            }, 10000 + Math.random() * 20000); // Random time between 10-30 seconds
-          } catch (error) {
-            console.error('Error making Bland API call:', error);
-            // Update call record to failed
-            const callToUpdate = calls.find(c => c.id === callId);
-            if (callToUpdate) {
-              callToUpdate.status = 'failed';
-              callToUpdate.error = error.message;
-              callToUpdate.updated_at = new Date().toISOString();
-              await saveCalls();
-            }
-          }
-        } else {
-          // Simulate call lifecycle without actual API
-          setTimeout(async () => {
-            try {
-              // Simulate call completion after a random time
-              const status = Math.random() > 0.2 ? 'completed' : 'failed';
-              const duration = Math.floor(Math.random() * 180) + 20;
-              
-              // Update the call status
-              const callToUpdate = calls.find(c => c.id === callId);
-              if (callToUpdate) {
-                callToUpdate.status = status;
-                callToUpdate.duration = duration;
-                callToUpdate.updated_at = new Date().toISOString();
-                await saveCalls();
-              }
-            } catch (err) {
-              console.error(`Error updating call status for ${callId}:`, err);
-            }
-          }, 10000 + Math.random() * 20000); // Random time between 10-30 seconds
-        }
         
         return res.json({
           jsonrpc: '2.0',
           id,
           result: {
-            callId
+            callId,
+            status: 'initiated',
+            message: 'Call initiated successfully'
           }
         });
       }

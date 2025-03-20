@@ -145,7 +145,7 @@ async function execute(params, context) {
   
   // Add webhook URL if provided
   if (params.webhookUrl) {
-    requestBody.webhook_url = params.webhookUrl;
+    requestBody.webhook = params.webhookUrl;
   }
   
   logger.info('Making call request', {
@@ -153,6 +153,7 @@ async function execute(params, context) {
     userId,
     phoneNumber: params.phoneNumber,
     voice: params.voice,
+    webhookUrl: params.webhookUrl,
     environment: process.env.NODE_ENV
   });
   
@@ -251,14 +252,16 @@ async function execute(params, context) {
       task: params.task,
       voice: params.voice,
       from_number: params.fromNumber || defaultFromNumber,
-      model: 'turbo', // Always use turbo in database
-      temperature: params.temperature || 1,
-      voicemail_action: params.voicemailAction || 'hangup',
-      answered_by_enabled: params.answeredByEnabled !== undefined ? params.answeredByEnabled : true,
-      max_duration: params.maxDuration || 300,
-      update_status: 'Pending',
-      created_at: new Date(),
-      updated_at: new Date()
+      webhook: params.webhookUrl || '',
+      request_parameters: {
+        phoneNumber: params.phoneNumber,
+        task: params.task,
+        voice: params.voice,
+        maxDuration: params.maxDuration || 300,
+        temperature: params.temperature || 1,
+        webhookUrl: params.webhookUrl || ''
+      },
+      response_parameters: responseData
     };
     
     try {

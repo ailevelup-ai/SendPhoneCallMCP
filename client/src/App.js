@@ -28,6 +28,7 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
   const [maxDuration, setMaxDuration] = useState(300);
   const [phoneNumberError, setPhoneNumberError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState('');
   
   // Update selected voice when voices are loaded
   useEffect(() => {
@@ -114,6 +115,7 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
         voice: selectedVoice,
         maxDuration,
         temperature,
+        webhookUrl,
         model: 'turbo' // Always use turbo model
       });
       
@@ -132,6 +134,7 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
               voice: selectedVoice,
               maxDuration,
               temperature,
+              webhookUrl: webhookUrl || undefined,
               model: 'turbo' // Always use turbo model
             }
           }
@@ -233,6 +236,17 @@ function DirectCallForm({ voices, sessionId, setCurrentPlayingVoice, currentPlay
           value={task}
           onChange={(e) => setTask(e.target.value)}
           placeholder="Describe what the AI should do on this call..."
+        />
+      </div>
+      
+      <div className="form-group">
+        <label htmlFor="webhookUrl">Webhook URL (Optional)</label>
+        <input
+          type="url"
+          id="webhookUrl"
+          value={webhookUrl}
+          onChange={(e) => setWebhookUrl(e.target.value)}
+          placeholder="https://your-webhook-url.com/callback"
         />
       </div>
       
@@ -897,60 +911,58 @@ function App() {
     window.open("https://ailevelup.ai/wp-content/uploads/2025/03/SendMCPPhoneCallSplash.jpeg", "_blank", "noopener,noreferrer");
   };
 
+  if (!isAuthenticated) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
   if (!sessionId) {
     return <div className="loading">Initializing session...</div>;
   }
 
   return (
     <div className="app">
-      {!isAuthenticated ? (
-        <Login onLoginSuccess={handleLoginSuccess} />
-      ) : (
-        <>
-          <header className="app-header">
-            <div className="logo-container">
-              <h1>Phone Call MCP</h1>
+      <header className="app-header">
+        <div className="logo-container">
+          <h1>Phone Call MCP</h1>
+        </div>
+        {user && (
+          <div className="user-info">
+            <span>{user.email}</span>
+            <button className="logout-button" onClick={handleLogout}>Logout</button>
+          </div>
+        )}
+      </header>
+      
+      <main className="app-content">
+        {loading ? (
+          <div className="loading">Initializing MCP service...</div>
+        ) : error ? (
+          <div className="error-message">{error}</div>
+        ) : (
+          <div className="content-wrapper">
+            <div className="left-panel">
+              <DirectCallForm 
+                voices={voices} 
+                sessionId={sessionId}
+                setCurrentPlayingVoice={setCurrentPlayingVoice}
+                currentPlayingVoice={currentPlayingVoice}
+                fetchCallHistoryRef={fetchCallHistoryRef}
+              />
+              <CreditsManager sessionId={sessionId} />
             </div>
-            {user && (
-              <div className="user-info">
-                <span>{user.email}</span>
-                <button className="logout-button" onClick={handleLogout}>Logout</button>
-              </div>
-            )}
-          </header>
-          
-          <main className="app-content">
-            {loading ? (
-              <div className="loading">Initializing MCP service...</div>
-            ) : error ? (
-              <div className="error-message">{error}</div>
-            ) : (
-              <div className="content-wrapper">
-                <div className="left-panel">
-                  <DirectCallForm 
-                    voices={voices} 
-                    sessionId={sessionId}
-                    setCurrentPlayingVoice={setCurrentPlayingVoice}
-                    currentPlayingVoice={currentPlayingVoice}
-                    fetchCallHistoryRef={fetchCallHistoryRef}
-                  />
-                  <CreditsManager sessionId={sessionId} />
-                </div>
-                <div className="right-panel">
-                  <CallLogManager 
-                    sessionId={sessionId} 
-                    setFetchCallHistoryRef={setFetchCallHistoryRef} 
-                  />
-                </div>
-              </div>
-            )}
-          </main>
-          
-          <footer className="app-footer">
-            <p>&copy; 2025 Phone Call MCP. All rights reserved.</p>
-          </footer>
-        </>
-      )}
+            <div className="right-panel">
+              <CallLogManager 
+                sessionId={sessionId} 
+                setFetchCallHistoryRef={setFetchCallHistoryRef} 
+              />
+            </div>
+          </div>
+        )}
+      </main>
+      
+      <footer className="app-footer">
+        <p>&copy; 2025 Phone Call MCP. All rights reserved.</p>
+      </footer>
     </div>
   );
 }
