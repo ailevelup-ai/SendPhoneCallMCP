@@ -5,9 +5,25 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 const dotenv = require('dotenv');
+const { createClient } = require('@supabase/supabase-js');
 
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, '../.env') });
+
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+let supabase = null;
+if (supabaseUrl && (supabaseServiceKey || supabaseAnonKey)) {
+  // Create Supabase client with service key (preferred) or anon key
+  const key = supabaseServiceKey || supabaseAnonKey;
+  supabase = createClient(supabaseUrl, key);
+  console.log('Supabase client initialized with URL:', supabaseUrl);
+} else {
+  console.warn('Supabase credentials not found, some features may not work correctly');
+}
 
 // Create Express app
 const app = express();
@@ -170,27 +186,65 @@ app.post('/api/v1/mcp', async (req, res) => {
       
       // Handle getVoiceOptions
       if (name === 'getVoiceOptions') {
-        // Fetch voices from Bland API if API key is available
-        // Otherwise return mock voices
-        let voices;
+        let voices = [];
         
-        // Use AILEVELUP_ENTERPRISE_KEY or AILEVELUP_API_KEY as the Bland API key
-        const apiKey = process.env.AILEVELUP_ENTERPRISE_KEY || process.env.AILEVELUP_API_KEY || process.env.BLAND_API_KEY;
-        
-        if (apiKey) {
-          try {
-            const response = await axios.get('https://api.bland.ai/v1/voices', {
-              headers: {
-                'Authorization': `Bearer ${apiKey}`
-              }
-            });
-            voices = response.data.voices || [];
-          } catch (error) {
-            console.error('Error fetching voices from Bland API:', error);
-            // Fall back to mock voices
+        try {
+          // Try to fetch voices from Supabase first
+          if (supabase) {
+            console.log('Attempting to fetch voices from Supabase...');
+            const { data: supabaseVoices, error } = await supabase.from('voices').select('*');
+            
+            if (error) {
+              console.error('Error fetching voices from Supabase:', error);
+            } else if (supabaseVoices && supabaseVoices.length > 0) {
+              console.log(`Successfully fetched ${supabaseVoices.length} voices from Supabase`);
+              // Map the Supabase voices to the expected format
+              voices = supabaseVoices.map(voice => ({
+                id: voice.voice_id,
+                name: voice.name,
+                gender: voice.gender || 'unknown',
+                accent: voice.language || 'en-US',
+                description: voice.description || `${voice.name} voice`
+              }));
+              
+              return res.json({
+                jsonrpc: '2.0',
+                id,
+                result: {
+                  voices
+                }
+              });
+            } else {
+              console.log('No voices found in Supabase, falling back to Bland API');
+            }
+          }
+          
+          // If Supabase fetch fails or returns no voices, fall back to Bland API
+          // Use AILEVELUP_ENTERPRISE_KEY or AILEVELUP_API_KEY as the Bland API key
+          const apiKey = process.env.AILEVELUP_ENTERPRISE_KEY || process.env.AILEVELUP_API_KEY || process.env.BLAND_API_KEY;
+          
+          if (apiKey) {
+            try {
+              console.log('Fetching voices from Bland API...');
+              const response = await axios.get('https://api.bland.ai/v1/voices', {
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`
+                }
+              });
+              voices = response.data.voices || [];
+              console.log(`Successfully fetched ${voices.length} voices from Bland API`);
+            } catch (error) {
+              console.error('Error fetching voices from Bland API:', error);
+              // Fall back to mock voices
+              voices = getMockVoices();
+              console.log('Falling back to mock voices');
+            }
+          } else {
+            console.log('No API key found, using mock voices');
             voices = getMockVoices();
           }
-        } else {
+        } catch (error) {
+          console.error('Unexpected error in getVoiceOptions:', error);
           voices = getMockVoices();
         }
         
