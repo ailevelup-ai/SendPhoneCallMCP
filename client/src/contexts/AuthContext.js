@@ -33,19 +33,73 @@ export const AuthProvider = ({ children }) => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (event, session) => {
+        console.log('Auth state changed:', event);
         setSession(session);
         setUser(session?.user || null);
-        setLoading(false);
         
         if (session?.user) {
+          // If this is a sign-in or token-refreshed event
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            // For social logins, we might need to create a user record in our database
+            const { data: existingUser } = await supabase
+              .from('users')
+              .select('id')
+              .eq('id', session.user.id)
+              .single();
+              
+            if (!existingUser) {
+              // Create a user record for social login users
+              await createUserForSocialLogin(session.user);
+            }
+          }
+          
           fetchUserDetails(session.user.id);
         }
+        
+        setLoading(false);
       }
     );
 
     return () => subscription.unsubscribe();
   }, [supabase]);
+
+  // Create a user record for users who sign in with social providers
+  const createUserForSocialLogin = async (user) => {
+    try {
+      // Generate an API key
+      const apiKey = crypto.randomUUID ? crypto.randomUUID() : 
+        Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+      // Create user record
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          id: user.id,
+          email: user.email,
+          api_key: apiKey,
+          role: 'user'
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // Initialize credits
+      await supabase
+        .from('credits')
+        .insert({
+          user_id: user.id,
+          balance: 10.0 // Give 10 credits to start
+        });
+        
+      console.log('Created user record for social login user:', user.email);
+      return data;
+    } catch (error) {
+      console.error('Error creating user for social login:', error);
+      return null;
+    }
+  };
 
   // Fetch user details (credits, API key, etc.)
   const fetchUserDetails = async (userId) => {
@@ -72,6 +126,31 @@ export const AuthProvider = ({ children }) => {
       setCredits(creditData.balance);
     } catch (error) {
       console.error('Error fetching user details:', error);
+    }
+  };
+
+  // Social login function
+  const socialSignIn = async (provider) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      
+      if (error) throw error;
+      
+      // The redirect will happen automatically
+      return true;
+    } catch (error) {
+      console.error(`${provider} signin error:`, error);
+      setError(`Error signing in with ${provider}`);
+      setLoading(false);
+      return false;
     }
   };
 
@@ -218,6 +297,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!user,
     signUp,
     signIn,
+    socialSignIn,
     signOut,
     addCredits,
     resetApiKey,
