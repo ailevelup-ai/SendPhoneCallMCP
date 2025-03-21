@@ -355,6 +355,7 @@ app.post('/api/v1/mcp', async (req, res) => {
           max_duration: maxDuration,
           temperature,
           webhook_url: webhookUrl || '',
+          from_number: process.env.FROM_NUMBER || '+15615665857',
           status: 'initiated',
           duration: 0,
           created_at: callTime.toISOString(),
@@ -385,13 +386,25 @@ app.post('/api/v1/mcp', async (req, res) => {
             voice: voiceId,
             max_duration: maxDuration,
             temperature: temperature,
-            model: 'turbo'
+            model: 'turbo',
+            from: process.env.FROM_NUMBER || '+15615665857'
           };
           
           // Add webhook URL if provided
           if (webhookUrl) {
             requestBody.webhook = webhookUrl;
           }
+          
+          // Add encrypted key if available in .env
+          if (process.env.AILEVELUP_ENCRYPTED_KEY) {
+            requestBody.encrypted_key = process.env.AILEVELUP_ENCRYPTED_KEY;
+            console.log('Using encrypted key from environment variables');
+          }
+          
+          console.log('Request body:', JSON.stringify({
+            ...requestBody,
+            encrypted_key: requestBody.encrypted_key ? '[REDACTED]' : undefined
+          }));
           
           const response = await axios.post('https://api.bland.ai/v1/calls', 
             requestBody,
