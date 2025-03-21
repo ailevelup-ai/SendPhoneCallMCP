@@ -87,58 +87,9 @@ const setupVoices = async () => {
       console.log('Will use mock voices');
     }
     
-    // Get Bland AI voices to populate the table
-    console.log('Fetching voices from Bland AI...');
-    
-    const apiKey = process.env.AILEVELUP_ENTERPRISE_KEY || process.env.AILEVELUP_API_KEY || process.env.BLAND_API_KEY;
-    
-    if (!apiKey) {
-      console.error('No Bland API key found. Using mock voices instead.');
-      return populateMockVoices();
-    }
-    
-    try {
-      const axios = require('axios');
-      const response = await axios.get('https://api.bland.ai/v1/voices', {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`
-        }
-      });
-      
-      const blandVoices = response.data.voices || [];
-      console.log(`Retrieved ${blandVoices.length} voices from Bland AI`);
-      
-      if (blandVoices.length === 0) {
-        console.log('No voices returned from Bland AI. Using mock voices instead.');
-        return populateMockVoices();
-      }
-      
-      // Format the Bland voices for our database
-      const formattedVoices = blandVoices.map(voice => ({
-        name: voice.name.toLowerCase(),
-        voice_id: voice.voice_id,
-        provider: 'bland',
-        is_default: voice.name.toLowerCase() === 'michael', // Set Michael as default
-        description: voice.description || `${voice.name} voice`,
-        language: voice.accent_origin || 'en-US',
-        gender: voice.gender ? voice.gender.toLowerCase() : 'unknown'
-      }));
-      
-      // Insert the voices into the database
-      const { error: insertError } = await supabase.from('voices').insert(formattedVoices);
-      
-      if (insertError) {
-        console.error('Error inserting Bland voices:', insertError.message);
-        return false;
-      }
-      
-      console.log(`Successfully added ${formattedVoices.length} Bland voices to the database`);
-      return true;
-    } catch (error) {
-      console.error('Error fetching voices from Bland AI:', error.message);
-      console.log('Falling back to mock voices');
-      return populateMockVoices();
-    }
+    // Skip the Bland API integration for now and use our own mock voices
+    console.log('Using pre-defined Bland voices...');
+    return populateMockVoices();
   } catch (error) {
     console.error('Unexpected error in setupVoices:', error.message);
     return false;
@@ -147,61 +98,43 @@ const setupVoices = async () => {
 
 const populateMockVoices = async () => {
   try {
-    // Voice data to insert
+    // Voice data to insert - using actual Bland.ai voice IDs
     const mockVoices = [
       {
-        name: 'michael',
-        voice_id: 'bland-michael',
+        name: 'Alloy',
+        voice_id: 'd9c372fd-31db-4c74-ac5a-d194e8e923a4',
         provider: 'bland',
         is_default: true,
-        description: 'Clear and friendly American accent',
+        description: 'Clear, neutral American voice',
+        language: 'en-US',
+        gender: 'neutral'
+      },
+      {
+        name: 'Shimmer',
+        voice_id: '4a5c3c9b-19bc-4ae7-9d58-a96950e97ef5',
+        provider: 'bland',
+        is_default: false,
+        description: 'Gentle, feminine American voice',
+        language: 'en-US',
+        gender: 'female'
+      },
+      {
+        name: 'Nova',
+        voice_id: 'c9226079-edd4-49a2-be0a-6f8ffe2f11e7',
+        provider: 'bland',
+        is_default: false,
+        description: 'Feminine American voice with high clarity',
+        language: 'en-US',
+        gender: 'female'
+      },
+      {
+        name: 'Echo',
+        voice_id: '6418de41-12be-485b-ab26-40e7142ab7cb',
+        provider: 'bland',
+        is_default: false,
+        description: 'Masculine American voice',
         language: 'en-US',
         gender: 'male'
-      },
-      {
-        name: 'emma',
-        voice_id: 'bland-emma',
-        provider: 'bland',
-        is_default: false,
-        description: 'Professional female American voice',
-        language: 'en-US',
-        gender: 'female'
-      },
-      {
-        name: 'james',
-        voice_id: 'bland-james',
-        provider: 'bland',
-        is_default: false,
-        description: 'Deep and authoritative British accent',
-        language: 'en-GB',
-        gender: 'male'
-      },
-      {
-        name: 'olivia',
-        voice_id: 'bland-olivia',
-        provider: 'bland',
-        is_default: false,
-        description: 'Sophisticated British accent',
-        language: 'en-GB',
-        gender: 'female'
-      },
-      {
-        name: 'william',
-        voice_id: 'bland-william',
-        provider: 'bland',
-        is_default: false,
-        description: 'Casual Australian accent',
-        language: 'en-AU',
-        gender: 'male'
-      },
-      {
-        name: 'sophia',
-        voice_id: 'bland-sophia',
-        provider: 'bland',
-        is_default: false,
-        description: 'Warm Australian accent',
-        language: 'en-AU',
-        gender: 'female'
       }
     ];
     
