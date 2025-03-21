@@ -15,6 +15,19 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+.splash-image {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.splash-image img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  max-height: 200px;
+  object-fit: cover;
+}
+
 .login-card h2 {
   margin-bottom: 1.5rem;
   color: #333;
@@ -69,4 +82,25 @@
 .login-button:disabled {
   background-color: #90caf9;
   cursor: not-allowed;
+}
+
+.auth-toggle {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.toggle-button {
+  background: none;
+  border: none;
+  color: #2196f3;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.toggle-button:hover {
+  text-decoration: underline;
 } 

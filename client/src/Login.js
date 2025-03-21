@@ -6,12 +6,58 @@ function Login({ onLoginSuccess }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignup, setIsSignup] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState('');
+
+  const toggleMode = () => {
+    setIsSignup(!isSignup);
+    setError('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
+    try {
+      if (isSignup) {
+        // Check if passwords match for signup
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setIsLoading(false);
+          return;
+        }
+
+        // Call signup API
+        const response = await fetch('/api/v1/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password, name }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Signup failed');
+        }
+
+        // Auto-login after successful signup
+        await loginUser(email, password);
+      } else {
+        // Handle login
+        await loginUser(email, password);
+      }
+    } catch (error) {
+      console.error(isSignup ? 'Signup error:' : 'Login error:', error);
+      setError(error.message || `An error occurred during ${isSignup ? 'signup' : 'login'}`);
+      setIsLoading(false);
+    }
+  };
+
+  const loginUser = async (email, password) => {
     try {
       const response = await fetch('/api/v1/login', {
         method: 'POST',
@@ -38,7 +84,6 @@ function Login({ onLoginSuccess }) {
     } catch (error) {
       console.error('Login error:', error);
       setError(error.message || 'An error occurred during login');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -46,9 +91,29 @@ function Login({ onLoginSuccess }) {
   return (
     <div className="login-container">
       <div className="login-card">
+        <div className="splash-image">
+          <img 
+            src="https://ailevelup.ai/wp-content/uploads/2025/03/SendMCPPhoneCallSplash.jpeg" 
+            alt="Phone Call MCP" 
+          />
+        </div>
         <h2>Phone Call MCP</h2>
         <form onSubmit={handleSubmit}>
           {error && <div className="error-message">{error}</div>}
+          
+          {isSignup && (
+            <div className="form-group">
+              <label htmlFor="name">Name</label>
+              <input
+                type="text"
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                placeholder="Enter your full name"
+              />
+            </div>
+          )}
           
           <div className="form-group">
             <label htmlFor="email">Email</label>
@@ -74,14 +139,45 @@ function Login({ onLoginSuccess }) {
             />
           </div>
           
+          {isSignup && (
+            <div className="form-group">
+              <label htmlFor="confirmPassword">Confirm Password</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="Confirm your password"
+              />
+            </div>
+          )}
+          
           <button 
             type="submit" 
             className="login-button"
             disabled={isLoading}
           >
-            {isLoading ? 'Logging in...' : 'Login'}
+            {isLoading 
+              ? (isSignup ? 'Creating Account...' : 'Logging in...') 
+              : (isSignup ? 'Create Account' : 'Login')}
           </button>
         </form>
+        
+        <div className="auth-toggle">
+          <p>
+            {isSignup 
+              ? 'Already have an account?' 
+              : 'Don\'t have an account?'}
+            <button 
+              type="button" 
+              className="toggle-button" 
+              onClick={toggleMode}
+            >
+              {isSignup ? 'Sign In' : 'Create Account'}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );
