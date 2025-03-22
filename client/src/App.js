@@ -320,7 +320,7 @@ function CreditsManager({ sessionId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [customAmount, setCustomAmount] = useState(10);
+  const [customAmount, setCustomAmount] = useState(100);
   const [showCustomAmount, setShowCustomAmount] = useState(false);
 
   const fetchCredits = async () => {
@@ -396,7 +396,7 @@ function CreditsManager({ sessionId }) {
   const subscriptionPlans = [
     { id: 'sub_standard', name: 'Standard Monthly', price: 19.99, creditsPerMonth: 110 },
     { id: 'sub_pro', name: 'Pro Monthly', price: 49.99, creditsPerMonth: 420 },
-    { id: 'sub_enterprise', name: 'Enterprise Monthly', price: 199.99, creditsPerMonth: 1200 }
+    { id: 'sub_enterprise', name: 'Enterprise Monthly', price: 99.99, creditsPerMonth: 1100 }
   ];
 
   // Handle custom amount input
@@ -700,7 +700,7 @@ function CallLogManager({ sessionId, setFetchCallHistoryRef }) {
       {loading ? (
         <div className="loading-indicator">Loading call history...</div>
       ) : callHistory.length === 0 ? (
-        <div className="no-calls">No calls have been made yet.</div>
+        <div className="no-calls">No calls yet</div>
       ) : (
         <div className="call-table">
           <div className="call-header">
@@ -961,7 +961,7 @@ function App() {
       </main>
       
       <footer className="app-footer">
-        <p>&copy; 2025 Phone Call MCP. All rights reserved.</p>
+        <p>&copy; 2025 Sausage Software. All rights reserved.</p>
       </footer>
     </div>
   );
